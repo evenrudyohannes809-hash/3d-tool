@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { usePageMeta } from "../../lib/usePageMeta";
+import { getMetaByPath } from "../../lib/routes";
 import type {
   CalcState,
   Currency,
@@ -55,6 +57,7 @@ function convertStateCurrency(
 }
 
 export default function CalculatorPage() {
+  usePageMeta(getMetaByPath("/tool/calculator"));
   const [state, setState] = useState<CalcState>(() => loadState());
   const [printers, setPrinters] = useState<MyPrinter[]>(() => loadPrinters());
   const [rates, setRates] = useState<Rates>(DEFAULT_RATES);

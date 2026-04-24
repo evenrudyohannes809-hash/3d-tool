@@ -1,73 +1,82 @@
-# React + TypeScript + Vite
+# 3D.Tools
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Сборник веб-утилит для 3D-печатников. Всё работает локально в браузере,
+без регистрации и загрузки на сервер.
 
-Currently, two official plugins are available:
+## Что есть
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Калькулятор себестоимости 3D-печати** — считает цену и расход пластика,
+  парсит `.3mf` и `.gcode` (Bambu, Orca, Prusa, Cura, Creality, Anycubic),
+  мультицвет AMS, свои принтеры, режим "Проект".
+- Страницы-заглушки для будущих утилит (STL Viewer, STL Repair, G-code
+  Viewer, генератор коробок, литофан, база филаментов, матрица проблем
+  печати, учёт катушек).
 
-## React Compiler
+## Стек
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19 + TypeScript 6
+- Vite 8
+- Tailwind CSS 3 (soft-UI дизайн)
+- React Router 7
+- JSZip (парсинг `.3mf`)
+- Shallow pre-render через `scripts/prerender.mjs` — каждый роут получает
+  свой HTML с корректными `<title>` / `<meta description>` / Open Graph.
 
-## Expanding the ESLint configuration
+## Разработка
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev      # dev-сервер на http://localhost:5173
+npm run build    # tsc + vite build + prerender
+npm run preview  # локальный просмотр собранного dist/
+npm run lint     # eslint
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Как добавить новую утилиту
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. Добавить запись в `src/lib/routes.ts` (массив `TOOLS`) с уникальным
+   `slug`, `path`, `title`, `description`. Это и карточка на главной, и
+   мета-теги страницы.
+2. Если для утилиты уже готов интерфейс — добавить `<Route>` в
+   `src/main.tsx` и компонент-страницу в `src/pages/<utility>/`. Иначе
+   она автоматически рендерится как placeholder через `ToolPlaceholder`.
+3. Добавить иконку и цвет в массив `tools` в `src/pages/Home.tsx` (тут
+   иконки — JSX, поэтому это отдельный список).
+4. Запустить `npm run build` — prerender автоматически сгенерирует HTML
+   для нового роута.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## SEO
+
+- **Per-page мета-теги**: каждый роут получает свой HTML файл в сборке
+  (`dist/tool/<slug>/index.html`) через `scripts/prerender.mjs`. При
+  деплое настрой сервер (Vercel / Netlify / nginx) отдавать эти файлы
+  по соответствующим путям, а `dist/404.html` — для неизвестных.
+- **Верификация Google Search Console / Яндекс Вебмастер**: в
+  `index.html` сейчас стоят placeholder'ы
+  (`REPLACE_WITH_GOOGLE_VERIFICATION_CODE` и
+  `REPLACE_WITH_YANDEX_VERIFICATION_CODE`). Замени их реальными кодами
+  после подтверждения сайта в панелях.
+- **Canonical URL**: prerender подставляет `https://3d.tools` как
+  базовый URL. Если деплой на другой домен — выставь `SITE_URL` перед
+  сборкой (`SITE_URL=https://example.com npm run build`) или обнови
+  `SITE.url` в `src/lib/routes.ts`.
+
+## Структура
+
+```
+src/
+  lib/
+    routes.ts        — единый реестр роутов (title, description, slug)
+    usePageMeta.ts   — хук для client-side обновления <head>
+    calc/            — логика калькулятора (формулы, парсер файлов, LS)
+    theme.tsx        — тёмная/светлая тема
+  pages/
+    Home.tsx         — главная с карточками утилит
+    NotFound.tsx
+    ToolPlaceholder.tsx  — заглушка для утилит "в разработке"
+    calculator/      — React-компоненты калькулятора
+  components/
+    Layout.tsx, Header.tsx, Footer.tsx
+scripts/
+  prerender.mjs      — пост-билд: HTML на каждый роут с мета-тегами
 ```

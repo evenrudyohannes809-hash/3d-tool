@@ -4,12 +4,32 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#e6e8f0" />
+
+    <!-- Search console verifications — замени значения своими, когда
+         подтвердишь сайт в вебмастерах. Оставленные здесь — placeholder'ы. -->
+    <meta name="google-site-verification" content="REPLACE_WITH_GOOGLE_VERIFICATION_CODE" />
+    <meta name="yandex-verification" content="REPLACE_WITH_YANDEX_VERIFICATION_CODE" />
+
+    <!-- Дефолтные мета-теги. Для каждого роута пререндер (scripts/prerender.mjs)
+         сгенерирует отдельный HTML с уточнёнными title/description/OG. -->
+    <title>3D.Tools — утилиты для 3D-печатников</title>
     <meta
       name="description"
-      content="Утилиты для 3D-печатников: анализ STL, генераторы моделей, калибровочные g-code, справочники по филаментам. Бесплатно, локально в браузере."
+      content="Утилиты для 3D-печатников: калькулятор себестоимости, анализ STL, генераторы моделей, калибровочные g-code, справочник по филаментам. Всё работает локально в браузере, без регистрации."
     />
-    <meta name="theme-color" content="#e6e8f0" />
-    <title>3D.Tools — утилиты для 3D-печатников</title>
+    <link rel="canonical" href="https://3d.tools/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="3D.Tools" />
+    <meta property="og:title" content="3D.Tools — утилиты для 3D-печатников" />
+    <meta
+      property="og:description"
+      content="Утилиты для 3D-печатников: калькулятор себестоимости, анализ STL, генераторы моделей, калибровочные g-code, справочник по филаментам."
+    />
+    <meta property="og:url" content="https://3d.tools/" />
+    <meta property="og:image" content="/og-default.png" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="root"></div>

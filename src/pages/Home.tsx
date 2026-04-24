@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { usePageMeta } from "../lib/usePageMeta";
+import { HOME_META } from "../lib/routes";
 
 type Tag = "Готово" | "Скоро" | "В разработке";
 
@@ -127,6 +129,7 @@ const categories = [
 ];
 
 export default function Home() {
+  usePageMeta(HOME_META);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("Все");
 
