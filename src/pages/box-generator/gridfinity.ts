@@ -32,7 +32,6 @@ const INNER_FILLET_R = 2.8; // скругление углов полости
 
 // Stacking lip — стыковочный бортик сверху для стакающихся коробок
 const STACKING_LIP_H = 4.4;
-const STACKING_LIP_SUPPORT_H = 1.2; // "подушка" из стенки, чтобы lip не висел в воздухе
 const STACKING_LIP_DEPTH = 2.6; // суммарный inward-scos бортика (суживает отверстие к верху)
 
 // Магниты / винты — значения по умолчанию (спека kennetek), параметры
@@ -312,8 +311,13 @@ export async function buildGridfinityBin(
   );
 
   const lipOn = lipStyle !== "none";
-  const cavityH =
-    bodyH - (lipOn ? STACKING_LIP_SUPPORT_H : 0) + 0.02; // чуть-чуть "с запасом" чтобы subtract не оставлял тонкий слой
+  // Полость ВСЕГДА идёт на полную высоту стенок (bodyH). Раньше при
+  // включённом lip я укорачивал её на STACKING_LIP_SUPPORT_H — из-за
+  // этого на верх стенки налипала сплошная "крышка" толщиной 1.2мм, и
+  // пользователь видел именно её, а не настоящее дно коробки (отсюда
+  // эффект "дно поднимается"). Lip сам по себе конструктивно опирается
+  // на верх стенки — никакая "подушка" внутри не нужна.
+  const cavityH = bodyH + 0.02;
   const cavityInnerW = Math.max(1, outerW - 2 * WALL);
   const cavityInnerD = Math.max(1, outerD - 2 * WALL);
   const cavityCS = rrect(cavityInnerW, cavityInnerD, INNER_FILLET_R);
