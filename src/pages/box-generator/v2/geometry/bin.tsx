@@ -70,6 +70,9 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
     scoopRadius,
     labelLedgeWidth,
     labelLedgeHeight,
+    magnets,
+    screwHoles,
+    magnetDiameter,
   } = params;
 
   const baseH = baseStyle === "lite" ? LITE_BASE_HEIGHT : BASE_HEIGHT;
@@ -393,6 +396,44 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
         </mesh>
       ))}
 
+      {/* HOLE INDICATORS: кружочки снизу, показывают где будут дырки магнитов/винтов
+          в STL-экспорте. В превью они не вычитаются из меша (нет CSG), просто
+          подсвечивают позицию. */}
+      {baseStyle === "standard" &&
+        computeHolePositions({
+          pattern: magnets,
+          xUnits,
+          yUnits,
+          gridSize,
+        }).map((p, i) => (
+          <mesh
+            key={`mag-${i}`}
+            position={[p.x, p.y, 0.02]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <cylinderGeometry
+              args={[magnetDiameter / 2, magnetDiameter / 2, 0.05, 24]}
+            />
+            <meshBasicMaterial color="#1a2a3a" />
+          </mesh>
+        ))}
+      {baseStyle === "standard" &&
+        computeHolePositions({
+          pattern: screwHoles,
+          xUnits,
+          yUnits,
+          gridSize,
+        }).map((p, i) => (
+          <mesh
+            key={`scr-${i}`}
+            position={[p.x, p.y, 0.03]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <cylinderGeometry args={[1.5, 1.5, 0.05, 18]} />
+            <meshBasicMaterial color="#0a1520" />
+          </mesh>
+        ))}
+
       {/* LEDGES */}
       {ledgeGeometries.map((le) => (
         <mesh
@@ -408,6 +449,58 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
       ))}
     </group>
   );
+}
+
+// Позиции индикаторов магнитов/винтов в локальных координатах бина.
+// Смещение от края клетки — 8мм (стандарт Gridfinity HOLE_FROM_SIDE).
+function computeHolePositions({
+  pattern,
+  xUnits,
+  yUnits,
+  gridSize,
+}: {
+  pattern: HolePattern;
+  xUnits: number;
+  yUnits: number;
+  gridSize: number;
+}): Array<{ x: number; y: number }> {
+  if (pattern === "none") return [];
+  const HOLE_FROM_SIDE = 8;
+  const outerW = xUnits * gridSize - 0.5;
+  const outerD = yUnits * gridSize - 0.5;
+  const res: Array<{ x: number; y: number }> = [];
+
+  if (pattern === "corner") {
+    // 4 в углах всей коробки
+    const hw = outerW / 2;
+    const hd = outerD / 2;
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        res.push({
+          x: sx * (hw - HOLE_FROM_SIDE),
+          y: sy * (hd - HOLE_FROM_SIDE),
+        });
+      }
+    }
+  } else {
+    // full: по 4 в каждой клетке
+    for (let ix = 0; ix < xUnits; ix++) {
+      for (let iy = 0; iy < yUnits; iy++) {
+        const cx = -outerW / 2 + 0.25 + ix * gridSize + gridSize / 2;
+        const cy = -outerD / 2 + 0.25 + iy * gridSize + gridSize / 2;
+        const half = gridSize / 2;
+        for (const sx of [-1, 1]) {
+          for (const sy of [-1, 1]) {
+            res.push({
+              x: cx + sx * (half - HOLE_FROM_SIDE),
+              y: cy + sy * (half - HOLE_FROM_SIDE),
+            });
+          }
+        }
+      }
+    }
+  }
+  return res;
 }
 
 // Public: outer dimensions (для UI-подписи "Габариты модели")

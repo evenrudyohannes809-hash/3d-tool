@@ -10,7 +10,6 @@ import { ViewerV2 } from "./v2/Viewer";
 import type { BinParams } from "./v2/geometry/bin";
 import { binOuterDimensions as binOuterDimensionsV2 } from "./v2/geometry/bin";
 import {
-  buildGridfinityBin,
   DEFAULT_BIN,
   type GridfinityBinParams,
   type LipStyle,
@@ -24,6 +23,7 @@ import {
   type RegularBoxParams,
 } from "./regularBox";
 import { exportSTL } from "./stlExport";
+import { exportGridfinitySTLviaWorker } from "./v2/exportV2";
 
 type Mode = "gridfinity" | "regular";
 
@@ -35,33 +35,21 @@ export default function BoxGeneratorPage() {
   const [grid, setGrid] = useState<GridfinityBinParams>(DEFAULT_BIN);
   const [box, setBox] = useState<RegularBoxParams>(DEFAULT_BOX);
 
-  // Геометрию Gridfinity строит WASM-модуль manifold-3d асинхронно, поэтому
-  // держим её в state и обновляем через useEffect с cancellation.
-  const [mesh, setMesh] = useState<THREE.Group | null>(null);
-  const [building, setBuilding] = useState(false);
+  // Режим "обычная коробка" рендерится из THREE.Group, который строится
+  // синхронно (без CSG). Для Gridfinity-режима превью теперь идёт через
+  // r3f-компонент <Bin> (см. ViewerV2) — CSG в превью не нужен.
+  const [regularMesh, setRegularMesh] = useState<THREE.Group | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    setBuilding(true);
-    const build = async () => {
-      try {
-        const g =
-          mode === "gridfinity"
-            ? await buildGridfinityBin(grid)
-            : buildRegularBox(box);
-        if (!cancelled) setMesh(g);
-      } catch (e) {
-        console.error("Build error:", e);
-        if (!cancelled) setMesh(null);
-      } finally {
-        if (!cancelled) setBuilding(false);
-      }
-    };
-    build();
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, grid, box]);
+    if (mode !== "regular") return;
+    try {
+      setRegularMesh(buildRegularBox(box));
+    } catch (e) {
+      console.error("Regular box build error:", e);
+      setRegularMesh(null);
+    }
+  }, [mode, box]);
 
   // Маппинг старых параметров grid → новый BinParams для V2-вьюера
   const binParamsV2: BinParams = useMemo(
@@ -92,14 +80,26 @@ export default function BoxGeneratorPage() {
       ? binOuterDimensionsV2(binParamsV2)
       : regularBoxDimensions(box);
 
-  const onExport = () => {
-    if (!mesh) return;
+  const onExport = async () => {
     if (mode === "gridfinity") {
+      // Gridfinity-экспорт считает CSG в worker-потоке (магниты/винты + полость).
       const name = `gridfinity-${grid.xUnits}x${grid.yUnits}x${grid.zUnits}`;
-      exportSTL(mesh, name);
+      setExporting(true);
+      try {
+        await exportGridfinitySTLviaWorker(grid, name);
+      } catch (e) {
+        console.error("STL export error:", e);
+        alert(
+          "Не удалось построить STL: " +
+            (e instanceof Error ? e.message : String(e)),
+        );
+      } finally {
+        setExporting(false);
+      }
     } else {
+      if (!regularMesh) return;
       const name = `box-${Math.round(box.width)}x${Math.round(box.depth)}x${Math.round(box.height)}`;
-      exportSTL(mesh, name);
+      exportSTL(regularMesh, name);
     }
   };
 
@@ -161,10 +161,10 @@ export default function BoxGeneratorPage() {
           <button
             type="button"
             onClick={onExport}
-            disabled={!mesh || building}
+            disabled={exporting || (mode === "regular" && !regularMesh)}
             className="btn-primary w-full"
           >
-            {building && !mesh ? "Подготовка..." : "Скачать STL"}
+            {exporting ? "Собираю STL…" : "Скачать STL"}
           </button>
         </div>
 
@@ -173,10 +173,12 @@ export default function BoxGeneratorPage() {
           {mode === "gridfinity" ? (
             <ViewerV2 params={binParamsV2} theme={theme} fitKey={mode} />
           ) : (
-            <Viewer mesh={mesh} theme={theme} fitKey={mode} />
+            <Viewer mesh={regularMesh} theme={theme} fitKey={mode} />
           )}
-          {building && mode === "regular" ? (
-            <div className="absolute right-4 top-4 tag text-xs">Считаю…</div>
+          {exporting ? (
+            <div className="absolute right-4 top-4 tag text-xs">
+              Собираю STL…
+            </div>
           ) : null}
         </div>
       </div>
