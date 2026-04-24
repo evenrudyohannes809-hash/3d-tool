@@ -313,7 +313,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
       {baseStyle === "lite" && baseGeometry && (
         <mesh geometry={baseGeometry} castShadow receiveShadow>
           <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
-          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={1} />
+          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={2} />
         </mesh>
       )}
       {baseStyle === "standard" &&
@@ -326,7 +326,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
             receiveShadow
           >
             <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
-            <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={1} />
+            <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={2} />
           </mesh>
         ))}
       {baseStyle === "standard" && bridgeGeometry && (
@@ -337,7 +337,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
           receiveShadow
         >
           <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
-          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={1} />
+          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={2} />
         </mesh>
       )}
 
@@ -349,7 +349,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
         receiveShadow
       >
         <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
-        <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={1} />
+        <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={2} />
       </mesh>
 
       {/* STACKING LIP */}
@@ -361,7 +361,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
           receiveShadow
         >
           <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
-          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={1} />
+          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={2} />
         </mesh>
       )}
 
@@ -375,7 +375,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
           receiveShadow
         >
           <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
-          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={1} />
+          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={2} />
         </mesh>
       ))}
 
@@ -389,7 +389,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
           receiveShadow
         >
           <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
-          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={1} />
+          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={2} />
         </mesh>
       ))}
 
@@ -403,7 +403,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
           receiveShadow
         >
           <meshStandardMaterial color={color} roughness={0.5} metalness={0.05} />
-          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={1} />
+          <Edges color={EDGE_COLOR} threshold={edgeAngle} lineWidth={2} />
         </mesh>
       ))}
     </group>

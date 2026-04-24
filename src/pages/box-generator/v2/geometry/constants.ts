@@ -59,10 +59,10 @@ export const SCREW_DIAMETER = 3;
 export const HOLE_FROM_SIDE = 8; // центр отверстия от бока клетки
 
 // ── Визуальное ──
-export const EDGE_COLOR = "#0f1c2c";
-export const EDGE_THRESHOLD_DEG = 20; // угол, начиная с которого рисуется edge
-export const MATERIAL_COLOR_LIGHT = "#6da9d9"; // фирменный голубой
-export const MATERIAL_COLOR_DARK = "#8fb8d9";
+export const EDGE_COLOR = "#000000"; // чёрные контуры CAD-look
+export const EDGE_THRESHOLD_DEG = 15; // угол, начиная с которого рисуется edge
+export const MATERIAL_COLOR_LIGHT = "#5b9bd5"; // фирменный голубой, как у gridfinitygenerator.com
+export const MATERIAL_COLOR_DARK = "#7aaee0";
 
 // ── Сегменты скруглений (тесселяция) ──
 export const CORNER_SEGMENTS = 12; // сегментов на 90°-дугу угла

@@ -15,6 +15,7 @@ import {
   type GridfinityBinParams,
   type LipStyle,
   type BaseHoles,
+  type BaseStyle,
 } from "./gridfinity";
 import {
   buildRegularBox,
@@ -309,6 +310,103 @@ function GridfinityControls({
                   : "Без бортика"}
             </Pill>
           ))}
+        </div>
+      </div>
+
+      <div>
+        <Label hint="Стандартная база — 3-уровневая с магнитами, как у Gridfinity-спеки. Lite — плоская тонкая плита (экономит пластик, но в baseplate не защёлкивается и без магнитов).">
+          Тип базы
+        </Label>
+        <div className="flex gap-2 flex-wrap">
+          {(["standard", "lite"] as BaseStyle[]).map((b) => (
+            <Pill
+              key={b}
+              active={value.baseStyle === b}
+              onClick={() => set("baseStyle", b)}
+            >
+              {b === "standard" ? "Стандартная" : "Lite (тонкая)"}
+            </Pill>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Label hint="Разбить внутреннее пространство на отсеки перегородками. 1×1 — без перегородок.">
+          Перегородки (отсеки)
+        </Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>По ширине</Label>
+            <NumberField
+              value={value.compartmentsX}
+              onChange={(v) =>
+                set("compartmentsX", Math.max(1, Math.min(10, Math.round(Number(v) || 1))))
+              }
+              min={1}
+              max={10}
+              step={1}
+            />
+          </div>
+          <div>
+            <Label>По глубине</Label>
+            <NumberField
+              value={value.compartmentsY}
+              onChange={(v) =>
+                set("compartmentsY", Math.max(1, Math.min(10, Math.round(Number(v) || 1))))
+              }
+              min={1}
+              max={10}
+              step={1}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <Label hint="Скос у задней стенки отсека — удобнее доставать мелочь пальцем. 0 — выключено.">
+          Scoop (наклонный пол)
+        </Label>
+        <NumberField
+          value={value.scoopRadius}
+          onChange={(v) => set("scoopRadius", Math.max(0, Math.min(20, Number(v) || 0)))}
+          suffix="мм"
+          min={0}
+          max={20}
+          step={0.5}
+        />
+      </div>
+
+      <div>
+        <Label hint="Горизонтальная полочка спереди отсека под стикер / ярлык. 0 — выключено.">
+          Label (полка под ярлык)
+        </Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Ширина</Label>
+            <NumberField
+              value={value.labelLedgeWidth}
+              onChange={(v) =>
+                set("labelLedgeWidth", Math.max(0, Math.min(30, Number(v) || 0)))
+              }
+              suffix="мм"
+              min={0}
+              max={30}
+              step={0.5}
+            />
+          </div>
+          <div>
+            <Label>Толщина</Label>
+            <NumberField
+              value={value.labelLedgeHeight}
+              onChange={(v) =>
+                set("labelLedgeHeight", Math.max(0.4, Math.min(5, Number(v) || 1.2)))
+              }
+              suffix="мм"
+              min={0.4}
+              max={5}
+              step={0.1}
+            />
+          </div>
         </div>
       </div>
 
