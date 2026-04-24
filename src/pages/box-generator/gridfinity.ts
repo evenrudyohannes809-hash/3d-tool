@@ -250,29 +250,29 @@ export function buildGridfinityBin(
   // оставлен в типе только для совместимости с UI, но скрыт из панели.
 
   // ── 3) Верхний lip (стыковочный бортик для стакающихся коробок) ──
+  // Прямой кольцевой бортик — тех же внешних/внутренних размеров что и
+  // стенки, стыкуется с верхом стенок без зазора. Без bevel, иначе ExtrudeGeometry
+  // добавляет скосы на обоих концах и бортик "отлетает" над стенкой.
   if (lipStyle !== "none") {
     const lipH = lipStyle === "default" ? LIP_HEIGHT_DEFAULT : LIP_HEIGHT_THIN;
     const lipShape = roundedRectShape(outerW, outerH, BASE_OUTER_RADIUS);
-    const lipInnerW = outerW - outerWallThickness * 2;
-    const lipInnerH = outerH - outerWallThickness * 2;
     const lipInner = rectPathWithRadius(
-      lipInnerW,
-      lipInnerH,
+      outerW - outerWallThickness * 2,
+      outerH - outerWallThickness * 2,
       Math.max(1, BASE_OUTER_RADIUS - outerWallThickness),
     );
     lipShape.holes.push(lipInner);
     const lipGeom = new THREE.ExtrudeGeometry(lipShape, {
       depth: lipH,
-      bevelEnabled: lipStyle === "default",
-      bevelSize: lipStyle === "default" ? 0.8 : 0,
-      bevelThickness: lipStyle === "default" ? 0.8 : 0,
-      bevelSegments: 4,
+      bevelEnabled: false,
       steps: 1,
       curveSegments: 16,
     });
     lipGeom.rotateX(-Math.PI / 2);
     const lipMesh = new THREE.Mesh(lipGeom);
-    lipMesh.position.y = SKIRT_H_TOTAL + bodyHeight + lipH;
+    // Низ бортика = верх стенок; после rotateX(-π/2) геометрия идёт от
+    // position.y ВВЕРХ на lipH — значит position.y и есть НИЖНЯЯ грань.
+    lipMesh.position.y = SKIRT_H_TOTAL + bodyHeight;
     group.add(lipMesh);
   }
 
