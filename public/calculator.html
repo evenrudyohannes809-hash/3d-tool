@@ -1,0 +1,2285 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="google-site-verification" content="e3sGYHUQ48MC8jW4NbvK2VA3S_CUSDZmfj7DY4WCoFM">
+  <meta name="yandex-verification" content="bd33534f15920833">
+  <title>Калькулятор себестоимости 3D-печати | Печатники и Печатницы</title>
+  <meta name="description" content="Бесплатный калькулятор себестоимости 3D-печати. Анализ .3mf и .gcode файлов, все популярные принтеры Bambu, Creality, Anycubic. Мультицвет AMS, валюты ₽ $ € ₸ Br.">
+  <meta name="keywords" content="калькулятор 3d печати, себестоимость 3d печать, расчет стоимости 3d печати, калькулятор gcode, калькулятор 3mf, bambu lab калькулятор, AMS калькулятор, стоимость 3d печати онлайн">
+  <meta name="author" content="Печатники и Печатницы | @pechatnikjurec">
+  <meta name="robots" content="index, follow">
+  <!-- Open Graph — красивые карточки в Telegram, ВКонтакте, WhatsApp -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Калькулятор себестоимости 3D-печати">
+  <meta property="og:description" content="Считайте себестоимость правильно. Анализ .3mf и .gcode, все принтеры, мультицвет AMS, курсы валют онлайн.">
+  <meta property="og:site_name" content="Печатники и Печатницы">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Калькулятор себестоимости 3D-печати">
+  <meta name="twitter:description" content="Бесплатный калькулятор себестоимости 3D-печати с анализом .3mf и .gcode файлов.">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    /* Scoped to .calc-root so calc's defaults do not leak into the host site. */
+    .calc-root {
+      --bg-deep: #0f172a;
+      --bg-spot: rgba(67, 56, 202, 0.35);
+      --glass-bg: rgba(255, 255, 255, 0.08);
+      --glass-border: rgba(255, 255, 255, 0.2);
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+    }
+    .calc-root * { box-sizing: border-box; }
+    .calc-root {
+      font-family: system-ui, -apple-system, sans-serif;
+      color: var(--text-primary);
+      padding: 0;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    .glass {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+    }
+    .glass-btn {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      color: var(--text-primary);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .glass-btn:hover, .glass-btn:active { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+    input, select {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      color: var(--text-primary);
+      padding: 12px 14px;
+      width: 100%;
+      font-size: 1rem;
+    }
+    input::placeholder { color: rgba(203, 213, 225, 0.6); }
+    input:focus, select:focus { outline: none; border-color: rgba(255,255,255,0.35); box-shadow: 0 0 0 2px rgba(255,255,255,0.08); }
+    select option { background: #1e293b; color: #f8fafc; }
+    .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+
+    /* ── МОИ ПРИНТЕРЫ ── */
+    .my-printer-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 14px;
+      border: 1.5px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      cursor: pointer; transition: all 0.2s; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .my-printer-card.active {
+      border-color: rgba(99,102,241,0.7);
+      background: rgba(99,102,241,0.15);
+      box-shadow: 0 0 16px rgba(99,102,241,0.3), inset 0 0 12px rgba(99,102,241,0.08);
+    }
+    .my-printer-card.active .printer-name { color: #c7d2fe; }
+    .printer-active-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(148,163,184,0.3); transition: all 0.2s;
+    }
+    .my-printer-card.active .printer-active-dot {
+      background: #818cf8;
+      box-shadow: 0 0 8px rgba(129,140,248,0.8);
+    }
+    .printer-name { flex: 1; font-size: 13px; font-weight: 600; color: #94a3b8; transition: color 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .printer-meta { font-size: 10px; color: #64748b; flex-shrink: 0; }
+    .printer-gear-btn {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      color: #64748b; font-size: 13px; cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .printer-gear-btn:active { background: rgba(255,255,255,0.12); color: #cbd5e1; }
+
+    /* Строки в таблице сравнения */
+    .compare-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .compare-name { font-size: 12px; color: #94a3b8; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .compare-cost { font-size: 15px; font-weight: 700; color: #e0e7ff; flex-shrink: 0; margin-left: 8px; }
+    .compare-row.cheapest { border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+    .compare-row.cheapest .compare-cost { color: #4ade80; }
+    .compare-cheapest-badge { font-size: 9px; color: #4ade80; margin-left: 5px; font-weight: 700; }
+
+    /* Модалка принтера */
+    .printer-modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 0 0 env(safe-area-inset-bottom);
+    }
+    .printer-modal {
+      background: #111827; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 24px 24px 0 0; padding: 20px; width: 100%; max-width: 480px;
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+    .printer-modal h3 { font-size: 15px; font-weight: 700; color: #e2e8f0; margin-bottom: 16px; }
+    .printer-modal label { display: block; margin-bottom: 10px; }
+    .printer-modal .field-label { font-size: 13px; color: #94a3b8; margin-bottom: 6px; font-weight: 500; }
+    .printer-modal input, .printer-modal select {
+      width: 100%; padding: 12px 14px; border-radius: 12px;
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+      color: #f1f5f9; font-size: 15px; outline: none;
+    }
+    .printer-modal select { appearance: auto; }
+    .printer-modal input:focus, .printer-modal select:focus { border-color: rgba(99,102,241,0.6); box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .modal-btn { flex: 1; padding: 11px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; border: none; }
+    .modal-btn:active { transform: scale(0.97); }
+    .modal-btn.save { background: linear-gradient(135deg, rgba(99,102,241,0.8), rgba(129,140,248,0.8)); color: white; }
+    .modal-btn.cancel { background: rgba(255,255,255,0.08); color: #94a3b8; border: 1px solid rgba(255,255,255,0.12); }
+    .modal-btn.delete { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+
+    /* Диалог подтверждения */
+    .confirm-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .confirm-box {
+      background: #111827; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px; padding: 24px; max-width: 320px; width: 100%; text-align: center;
+    }
+    .confirm-box .confirm-icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .confirm-box h4 { font-size: 15px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px; }
+    .confirm-box p { font-size: 12px; color: #64748b; margin-bottom: 18px; line-height: 1.5; }
+    .confirm-btns { display: flex; gap: 8px; }
+
+    /* ── РЕЖИМ ПРОЕКТ ── */
+    @keyframes projectPulse {
+      0%,100% { opacity:0.7; } 50% { opacity:1; }
+    }
+    body.project-mode {
+    }
+    body.project-mode::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      box-shadow:
+        inset 0 0 120px rgba(99,102,241,0.35),
+        inset 0 0 40px rgba(139,92,246,0.25),
+        inset 0 0 0 4px rgba(99,102,241,0.8);
+      animation: projectPulse 2.5s ease-in-out infinite;
+    }
+    .project-mode-badge {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      background: linear-gradient(90deg, #4338ca, #7c3aed, #4338ca);
+      background-size: 200% 100%;
+      animation: projectPulse 2s ease-in-out infinite;
+      text-align: center; font-size: 13px; font-weight: 800; color: white;
+      padding: 7px 16px; letter-spacing: 0.1em; text-shadow: 0 0 10px rgba(255,255,255,0.5);
+      display: none;
+    }
+    body.project-mode .project-mode-badge { display: block; }
+    body.project-mode #projectModeBtn {
+      background: rgba(99,102,241,0.3) !important;
+      border-color: rgba(99,102,241,0.8) !important;
+      color: #c7d2fe !important;
+      box-shadow: 0 0 25px rgba(99,102,241,0.6), 0 0 50px rgba(99,102,241,0.2) !important;
+    }
+
+    .project-part-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .project-part-card:active { opacity: 0.8; }
+    .project-part-printer { font-size: 12px; font-weight: 700; color: #c7d2fe; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .project-part-detail { font-size: 11px; color: #64748b; flex-shrink: 0; }
+    .project-part-cost { font-size: 14px; font-weight: 700; color: #e0e7ff; flex-shrink: 0; margin-left: 6px; }
+    .project-total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 4px; }
+    .toggle-switch {
+      flex-shrink:0; width:48px; height:28px; border-radius:14px;
+      background:rgba(148,163,184,0.35); border:1px solid rgba(255,255,255,0.1);
+      cursor:pointer; position:relative;
+      transition:background 0.3s ease,box-shadow 0.3s ease,border-color 0.3s ease;
+      touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+    }
+    .toggle-switch[aria-checked="true"] { background:rgba(34,197,94,0.6); border-color:rgba(34,197,94,0.5); box-shadow:0 0 20px rgba(34,197,94,0.4); }
+    .toggle-thumb {
+      position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
+      background:rgba(255,255,255,0.95); box-shadow:0 2px 6px rgba(0,0,0,0.25);
+      transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    }
+    .toggle-switch[aria-checked="true"] .toggle-thumb { transform:translateX(20px); }
+    .ams-fields { display:grid; grid-template-rows:0fr; opacity:0; transition:grid-template-rows 0.4s ease,opacity 0.3s ease; }
+    .ams-fields.ams-visible { grid-template-rows:1fr; opacity:1; }
+    .ams-fields-inner { overflow:hidden; min-height:0; padding-top:0.5rem; border-top:1px solid rgba(255,255,255,0.1); }
+    .ams-fields-inner .block { margin-bottom:0.5rem; }
+    .ams-fields-inner .block:last-child { margin-bottom:0; }
+    .tab-btn { flex:1; padding:12px 16px; border-radius:16px; font-weight:600; transition:all 0.2s; border:1px solid transparent; }
+    .tab-btn.active { background:rgba(255,255,255,0.15); border-color:rgba(255,255,255,0.25); }
+    .tab-btn:not(.active) { color:var(--text-secondary); }
+    .result-value { font-size:1.75rem; font-weight:700; letter-spacing:-0.02em; }
+    .currency-switch { display:flex; gap:4px; padding:4px; background:var(--glass-bg); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid var(--glass-border); border-radius:16px; margin-bottom:12px; }
+    .currency-btn { flex:1; padding:10px 12px; border:none; border-radius:12px; background:rgba(255,255,255,0.06); color:var(--text-secondary); font-size:1.1rem; font-weight:600; cursor:pointer; transition:background 0.25s ease,color 0.25s ease,box-shadow 0.25s ease,border-color 0.25s ease; border:1px solid transparent; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+    .currency-btn:hover { color:var(--text-primary); background:rgba(255,255,255,0.1); }
+    .currency-btn.active { background:rgba(99,102,241,0.35); color:#e0e7ff; border-color:rgba(129,140,248,0.5); box-shadow:0 0 18px rgba(99,102,241,0.4); }
+    .toast { position:fixed; left:50%; bottom:16px; transform:translateX(-50%) translateY(16px); opacity:0; pointer-events:none; transition:opacity 0.25s ease,transform 0.25s ease; z-index:50; width:min(28rem,calc(100% - 2rem)); }
+    .toast.toast-visible { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+    /* Drop zone */
+    .drop-zone { position:relative; border:2px dashed rgba(255,255,255,0.25); border-radius:20px; padding:2rem 1.5rem; text-align:center; background:rgba(255,255,255,0.04); transition:border-color 0.2s,background 0.2s; cursor:pointer; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color:rgba(99,102,241,0.6); background:rgba(99,102,241,0.08); }
+    .drop-zone input[type="file"] { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+    .parse-loading { display:none; text-align:center; padding:1.5rem; color:var(--text-secondary); font-size:0.95rem; }
+    .parse-loading.visible { display:block; }
+    /* Filament rows */
+    .fil-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; margin-bottom:8px; }
+    .fil-dot { width:18px; height:18px; border-radius:50%; flex-shrink:0; border:2px solid rgba(255,255,255,0.2); }
+    .fil-info { flex:1; min-width:0; }
+    .fil-name { font-size:13px; font-weight:600; }
+    .fil-gram { font-size:11px; color:#64748b; margin-top:1px; }
+    .fil-price-wrap { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+    .fil-price-wrap span { font-size:12px; color:#64748b; white-space:nowrap; }
+    .fil-price-inp { width:80px !important; padding:7px 10px !important; font-size:13px !important; text-align:right; }
+    /* Result rows */
+    .res-row { display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; border-bottom:1px solid rgba(255,255,255,0.06); }
+    .res-row:last-child { border-bottom:none; }
+    /* Slicer badge */
+    .sl-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 14px; border-radius:20px; font-size:12px; font-weight:700; }
+    .sl-bambu   { background:rgba(255,107,53,.15); border:1px solid rgba(255,107,53,.4); color:#ff6b35; }
+    .sl-orca    { background:rgba(34,211,165,.12); border:1px solid rgba(34,211,165,.4); color:#22d3a5; }
+    .sl-prusa   { background:rgba(76,154,255,.12); border:1px solid rgba(76,154,255,.4); color:#4c9aff; }
+    .sl-cura    { background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.4); color:#a855f7; }
+    .sl-creality{ background:rgba(239,68,68,.12);  border:1px solid rgba(239,68,68,.4);  color:#f87171; }
+    .sl-anycubic{ background:rgba(234,179,8,.12);  border:1px solid rgba(234,179,8,.4);  color:#fbbf24; }
+    .sl-unk     { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.2); color:#9999b0; }
+    .hl-green { color:#4ade80; font-weight:700; }
+    /* Reset button */
+    .reset-btn { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#f87171; border-radius:16px; padding:12px 20px; font-size:14px; font-weight:600; cursor:pointer; width:100%; transition:background 0.2s; }
+    .reset-btn:hover { background:rgba(239,68,68,0.2); }
+  </style>
+  <!-- Yandex.Metrika removed during integration -->
+
+  <!-- ═══════════ SOFT-UI SKIN OVERRIDE for 3D.Tools integration ═══════════ -->
+  <!-- Накладывается поверх исходной тёмной темы. Логика не тронута. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style id="softui-skin">
+    /* ════════════════════════════════════════════════════════════════
+       3D.Tools skin: bind calculator visuals to host site theme.
+       Site provides --bg, --ink, --muted, --accent, --accent2, --pink
+       as space-separated RGB triplets, and shadow tokens.
+       Auto-swaps when <html class="dark"> is toggled on the site.
+       ════════════════════════════════════════════════════════════════ */
+    .calc-root {
+      /* Short-hand locals derived from site tokens.
+         --c-bg  = page background (используется там где ДОЛЖНО сливаться с фоном)
+         --c-surf = lifted panels (используется для карточек/инпутов/кнопок) */
+      --c-bg: rgb(var(--bg));
+      --c-surf: rgb(var(--surface));
+      --c-ink: rgb(var(--ink));
+      --c-muted: rgb(var(--muted));
+      --c-accent: rgb(var(--accent));
+      --c-accent-soft: rgb(var(--accent) / 0.18);
+      --c-accent2: rgb(var(--accent2));
+      --c-pink: rgb(var(--pink));
+      --c-pink-soft: rgb(var(--pink) / 0.14);
+
+      /* Kill original inline gradients; let host bg show */
+      --bg-deep: transparent !important;
+      --bg-spot: transparent !important;
+      --glass-bg: var(--c-surf) !important;
+      --glass-border: transparent !important;
+      --text-primary: var(--c-ink) !important;
+      --text-secondary: var(--c-muted) !important;
+
+      color: var(--c-ink);
+      font-family: "Nunito", "Inter", system-ui, sans-serif;
+    }
+
+    /* Host page backdrop: leave body bg alone (site controls it). */
+    body { padding: 0 !important; margin: 0 !important; }
+
+    /* Width */
+    .calc-root { max-width: 44rem; padding: 0; margin: 0 auto; }
+    .calc-root > * + * { margin-top: 14px; }
+
+    /* ─── Cards (.glass) — raised soft-UI surface ─── */
+    .calc-root .glass {
+      background: var(--c-surf) !important;
+      border: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      color: var(--c-ink) !important;
+      box-shadow: var(--shadow-soft) !important;
+      border-radius: 24px !important;
+    }
+    .calc-root .glass .glass {
+      box-shadow: var(--shadow-soft-sm) !important;
+      border-radius: 20px !important;
+    }
+
+    /* ─── All generic buttons — raised pill ─── */
+    .calc-root .glass-btn,
+    .calc-root button:not(.currency-btn):not(.tab-btn):not(.modal-btn):not(.reset-btn):not(.printer-gear-btn):not(.toggle-switch) {
+      background: var(--c-surf) !important;
+      border: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      color: var(--c-ink) !important;
+      border-radius: 16px !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+      font-weight: 700 !important;
+      transition: box-shadow .15s, color .15s, transform .1s;
+    }
+    .calc-root .glass-btn:hover,
+    .calc-root button:not(.currency-btn):not(.tab-btn):not(.modal-btn):not(.reset-btn):not(.printer-gear-btn):not(.toggle-switch):hover {
+      color: var(--c-accent) !important;
+    }
+    .calc-root .glass-btn:active,
+    .calc-root button:not(.currency-btn):not(.tab-btn):not(.modal-btn):not(.reset-btn):not(.printer-gear-btn):not(.toggle-switch):active {
+      box-shadow: var(--shadow-soft-pressed) !important;
+      transform: translateY(1px);
+    }
+
+    /* Primary CTA — apply button */
+    .calc-root #applyBtn {
+      background: rgb(var(--accent)) !important;
+      color: #fff !important;
+      border: none !important;
+      box-shadow:
+        6px 6px 14px rgb(var(--accent) / 0.30),
+        -4px -4px 10px rgb(255 255 255 / 0.55) !important;
+    }
+    .dark .calc-root #applyBtn {
+      box-shadow:
+        6px 6px 14px rgba(10, 12, 18, 0.55),
+        -4px -4px 10px rgba(64, 70, 86, 0.30) !important;
+    }
+    .calc-root #applyBtn:hover { filter: brightness(1.08); }
+
+    /* ─── Inputs / selects / textareas — inset well ─── */
+    .calc-root input, .calc-root select, .calc-root textarea {
+      background: var(--c-surf) !important;
+      border: none !important;
+      color: var(--c-ink) !important;
+      border-radius: 14px !important;
+      box-shadow: var(--shadow-soft-inset) !important;
+      font-weight: 600 !important;
+    }
+    .calc-root input::placeholder { color: rgb(var(--muted) / 0.75) !important; }
+    .calc-root input:focus, .calc-root select:focus, .calc-root textarea:focus {
+      outline: none !important;
+      box-shadow:
+        var(--shadow-soft-inset),
+        0 0 0 2px rgb(var(--accent) / 0.40) !important;
+    }
+    .calc-root select option { background: var(--c-surf) !important; color: var(--c-ink) !important; }
+
+    /* ─── Tabs (Себестоимость / Цена / Файл) ─── */
+    .calc-root .tab-btn {
+      background: transparent !important;
+      border: none !important;
+      color: var(--c-muted) !important;
+      border-radius: 14px !important;
+      font-weight: 700 !important;
+      box-shadow: none !important;
+    }
+    .calc-root .tab-btn.active {
+      background: var(--c-surf) !important;
+      color: var(--c-accent) !important;
+      box-shadow: var(--shadow-soft-pressed) !important;
+    }
+
+    /* ─── Currency switch ─── */
+    .calc-root .currency-switch {
+      background: var(--c-surf) !important;
+      border: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      box-shadow: var(--shadow-soft-inset) !important;
+      border-radius: 20px !important;
+    }
+    .calc-root .currency-btn {
+      background: transparent !important;
+      border: none !important;
+      color: var(--c-muted) !important;
+      box-shadow: none !important;
+      border-radius: 14px !important;
+      font-weight: 700 !important;
+    }
+    .calc-root .currency-btn:hover { color: var(--c-ink) !important; }
+    .calc-root .currency-btn.active {
+      background: var(--c-surf) !important;
+      color: var(--c-accent) !important;
+      border: none !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+    }
+
+    /* ─── My-printer cards ─── */
+    .calc-root .my-printer-card {
+      background: var(--c-surf) !important;
+      border: none !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+      border-radius: 16px !important;
+    }
+    .calc-root .my-printer-card.active {
+      box-shadow: var(--shadow-soft-pressed) !important;
+      background: var(--c-accent-soft) !important;
+    }
+    .calc-root .my-printer-card.active .printer-name { color: var(--c-accent) !important; }
+    .calc-root .printer-name { color: var(--c-ink) !important; }
+    .calc-root .printer-meta { color: var(--c-muted) !important; }
+    .calc-root .printer-gear-btn {
+      background: var(--c-surf) !important;
+      border: none !important;
+      color: var(--c-muted) !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+      border-radius: 10px !important;
+    }
+    .calc-root .printer-gear-btn:hover { color: var(--c-accent) !important; }
+    .calc-root .printer-active-dot { background: rgb(var(--muted) / 0.4) !important; box-shadow: none !important; }
+    .calc-root .my-printer-card.active .printer-active-dot {
+      background: var(--c-accent) !important;
+      box-shadow: 0 0 8px rgb(var(--accent) / 0.6) !important;
+    }
+
+    /* ─── Compare rows ─── */
+    .calc-root .compare-row {
+      background: var(--c-surf) !important;
+      border: none !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+      border-radius: 12px !important;
+    }
+    .calc-root .compare-name { color: var(--c-muted) !important; }
+    .calc-root .compare-cost { color: var(--c-ink) !important; }
+    .calc-root .compare-row.cheapest {
+      box-shadow:
+        var(--shadow-soft-sm),
+        inset 0 0 0 2px var(--c-accent2) !important;
+    }
+    .calc-root .compare-row.cheapest .compare-cost { color: var(--c-accent2) !important; }
+    .calc-root .compare-cheapest-badge { color: var(--c-accent2) !important; }
+
+    /* ─── Toggle switch ─── */
+    .calc-root .toggle-switch {
+      background: var(--c-surf) !important;
+      border: none !important;
+      box-shadow: var(--shadow-soft-inset) !important;
+    }
+    .calc-root .toggle-switch[aria-checked="true"] {
+      background: var(--c-accent) !important;
+      box-shadow:
+        inset 3px 3px 6px rgba(0,0,0,0.20),
+        inset -3px -3px 6px rgba(255,255,255,0.20) !important;
+    }
+    .calc-root .toggle-thumb {
+      background: var(--c-surf) !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+    }
+    .calc-root .toggle-switch[aria-checked="true"] .toggle-thumb {
+      background: #fff !important;
+    }
+
+    /* ─── Drop zone ─── */
+    .calc-root .drop-zone {
+      background: var(--c-surf) !important;
+      border: 2px dashed rgb(var(--muted) / 0.35) !important;
+      color: var(--c-muted) !important;
+      border-radius: 20px !important;
+      box-shadow: var(--shadow-soft-inset) !important;
+    }
+    .calc-root .drop-zone:hover, .calc-root .drop-zone.drag-over {
+      border-color: var(--c-accent) !important;
+      background: var(--c-surf) !important;
+    }
+    .calc-root .parse-loading { color: var(--c-muted) !important; }
+
+    /* ─── Modals ─── */
+    .printer-modal-overlay, .confirm-overlay {
+      background: rgb(0 0 0 / 0.45) !important;
+      backdrop-filter: blur(8px) !important;
+    }
+    .printer-modal, .confirm-box {
+      background: rgb(var(--bg)) !important;
+      border: none !important;
+      color: rgb(var(--ink)) !important;
+      box-shadow:
+        0 -10px 40px rgba(0,0,0,0.35),
+        0 0 0 1px rgb(var(--muted) / 0.15) !important;
+    }
+    .printer-modal h3, .confirm-box h4 { color: rgb(var(--ink)) !important; }
+    .printer-modal .field-label, .confirm-box p { color: rgb(var(--muted)) !important; }
+    .printer-modal input, .printer-modal select {
+      background: rgb(var(--bg)) !important;
+      border: none !important;
+      color: rgb(var(--ink)) !important;
+      box-shadow: var(--shadow-soft-inset) !important;
+    }
+    .modal-btn { border: none !important; border-radius: 12px !important; }
+    .modal-btn.save {
+      background: rgb(var(--accent)) !important;
+      color: #fff !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+    }
+    .modal-btn.cancel {
+      background: rgb(var(--bg)) !important;
+      color: rgb(var(--muted)) !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+    }
+    .modal-btn.delete {
+      background: rgb(var(--bg)) !important;
+      color: rgb(var(--pink)) !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+    }
+
+    /* ─── Reset button (pink-tinted soft-UI) ─── */
+    .calc-root .reset-btn {
+      background: var(--c-surf) !important;
+      color: var(--c-pink) !important;
+      border: none !important;
+      border-radius: 16px !important;
+      font-weight: 700 !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+    }
+    .calc-root .reset-btn:hover { filter: brightness(1.05); }
+    .calc-root .reset-btn:active {
+      box-shadow: var(--shadow-soft-pressed) !important;
+      transform: translateY(1px);
+    }
+
+    /* ─── Footer links (канал / чат / автор) ─── */
+    .calc-root footer a {
+      background: var(--c-surf) !important;
+      border: none !important;
+      color: var(--c-ink) !important;
+      border-radius: 16px !important;
+      font-weight: 700 !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+      text-decoration: none !important;
+      transition: color .15s, box-shadow .15s, transform .1s;
+    }
+    .calc-root footer a:hover { color: var(--c-accent) !important; }
+    .calc-root footer a:active {
+      box-shadow: var(--shadow-soft-pressed) !important;
+      transform: translateY(1px);
+    }
+    .calc-root footer { color: var(--c-muted) !important; }
+
+    /* ─── Project-mode frame ─── */
+    .calc-root body.project-mode::before,
+    body.project-mode::before {
+      box-shadow:
+        inset 0 0 120px rgb(var(--accent) / 0.18),
+        inset 0 0 0 3px rgb(var(--accent) / 0.55) !important;
+      background: transparent !important;
+      opacity: 1 !important;
+    }
+    .project-mode-badge {
+      background: rgb(var(--accent)) !important;
+      color: #fff !important;
+    }
+    .calc-root .project-part-card {
+      background: var(--c-surf) !important;
+      border: none !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+      border-radius: 14px !important;
+    }
+    .calc-root .project-part-printer { color: var(--c-accent) !important; }
+    .calc-root .project-part-detail { color: var(--c-muted) !important; }
+    .calc-root .project-part-cost { color: var(--c-ink) !important; }
+    .calc-root .project-total-row { border-top: 1px solid rgb(var(--muted) / 0.25) !important; }
+
+    /* AMS fields */
+    .calc-root .ams-fields-inner { border-top: 1px solid rgb(var(--muted) / 0.25) !important; }
+
+    /* Toast */
+    .toast {
+      background: rgb(var(--bg)) !important;
+      color: rgb(var(--ink)) !important;
+      border: none !important;
+      border-radius: 18px !important;
+      box-shadow: var(--shadow-soft) !important;
+    }
+
+    /* ─── Result numbers & rows ─── */
+    .calc-root .result-value { color: var(--c-ink) !important; font-weight: 800 !important; }
+    .calc-root .res-row { border-bottom: 1px solid rgb(var(--muted) / 0.18) !important; }
+    .calc-root .res-row:last-child { border-bottom: none !important; }
+
+    /* ─── Slicer badges — keep brand colours but calm down saturation ─── */
+    .calc-root .sl-badge { border-radius: 999px !important; }
+
+    /* ─── Filament rows ─── */
+    .calc-root .fil-row {
+      background: var(--c-surf) !important;
+      border: none !important;
+      border-radius: 12px !important;
+      box-shadow: var(--shadow-soft-sm) !important;
+    }
+    .calc-root .fil-name { color: var(--c-ink) !important; }
+    .calc-root .fil-gram { color: var(--c-muted) !important; }
+    .calc-root .fil-price-wrap span { color: var(--c-muted) !important; }
+
+    /* ─── Text colour normalisation — neutralise tailwind palette ─── */
+    .calc-root .text-white,
+    .calc-root [class*="text-slate-1"],
+    .calc-root [class*="text-slate-2"],
+    .calc-root [class*="text-gray-1"],
+    .calc-root [class*="text-gray-2"],
+    .calc-root [class*="text-indigo-1"] { color: var(--c-ink) !important; }
+    .calc-root [class*="text-slate-3"],
+    .calc-root [class*="text-slate-4"],
+    .calc-root [class*="text-slate-5"],
+    .calc-root [class*="text-gray-3"],
+    .calc-root [class*="text-gray-4"],
+    .calc-root [class*="text-gray-5"] { color: var(--c-muted) !important; }
+    .calc-root [class*="text-indigo-"],
+    .calc-root [class*="text-blue-"] { color: var(--c-accent) !important; }
+    .calc-root [class*="text-emerald-"],
+    .calc-root [class*="text-green-"] { color: var(--c-accent2) !important; }
+    .calc-root [class*="text-red-"],
+    .calc-root [class*="text-pink-"],
+    .calc-root [class*="text-rose-"] { color: var(--c-pink) !important; }
+
+    /* Neutralise dark translucent backgrounds from tailwind */
+    .calc-root [class*="bg-white/"],
+    .calc-root [class*="bg-slate-"],
+    .calc-root [class*="bg-gray-"],
+    .calc-root [class*="bg-zinc-"],
+    .calc-root [class*="bg-black/"] { background: transparent !important; }
+
+    /* Neutralise tailwind borders */
+    .calc-root [class*="border-white/"],
+    .calc-root [class*="border-slate-"],
+    .calc-root [class*="border-gray-"],
+    .calc-root [class*="border-indigo-"] { border-color: transparent !important; }
+  </style>
+</head>
+<body class="antialiased">
+<div class="calc-root mx-auto min-w-0 w-full">
+
+  <!-- Валюты -->
+  <div class="currency-switch">
+    <button type="button" class="currency-btn active" data-currency="₽" aria-pressed="true">₽</button>
+    <button type="button" class="currency-btn" data-currency="$" aria-pressed="false">$</button>
+    <button type="button" class="currency-btn" data-currency="€" aria-pressed="false">€</button>
+    <button type="button" class="currency-btn" data-currency="₸" aria-pressed="false">₸</button>
+    <button type="button" class="currency-btn" data-currency="Br" aria-pressed="false">Br</button>
+  </div>
+
+  <!-- Вкладки -->
+  <div class="glass flex p-1.5 gap-1 mb-5">
+    <button type="button" id="tab-cost"  class="tab-btn active">Себестоимость</button>
+    <button type="button" id="tab-price" class="tab-btn">Цена</button>
+    <button type="button" id="tab-file"  class="tab-btn">Файл</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:8px;margin-bottom:8px">
+    <button type="button" id="projectModeBtn" class="glass-btn py-2.5 px-4 font-semibold text-slate-300" style="flex:1;font-size:13px">
+      🔧 Режим Проект
+    </button>
+    <button type="button" id="myProjectsBtn" class="glass-btn py-2.5 px-4 font-semibold text-slate-300" style="flex:0 0 auto;font-size:13px">
+      📂 Проекты
+    </button>
+  </div>
+
+
+  <!-- ══ ВКЛАДКА: Себестоимость ══ -->
+  <div id="panel-cost" class="space-y-4">
+    <div class="glass p-5 space-y-4">
+
+      <!-- КНОПКА ДОБАВИТЬ — всегда видна -->
+      <button type="button" id="addPrinterBtn" class="glass-btn w-full py-3 px-4 font-semibold text-indigo-300 border-indigo-400/30 mb-2">
+        🖨️ Добавить свой принтер
+      </button>
+
+      <!-- МОИ ПРИНТЕРЫ — скрыт пока нет принтеров -->
+      <div id="myPrintersSection" class="hidden">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm text-slate-300 font-semibold">🖨️ Мои принтеры</span>
+          <span class="text-xs text-slate-500" id="activePrinterCount">0 активных</span>
+        </div>
+        <div id="myPrintersList" class="flex flex-col gap-2 mb-2"></div>
+      </div>
+
+      <!-- Кнопка для пустого состояния (нет принтеров) -->
+      <div id="addPrinterBanner" class="hidden mb-2">
+        <button type="button" id="addPrinterBannerBtn" class="glass-btn w-full py-4 px-4 font-semibold text-indigo-300 border-indigo-400/40 text-base">
+          🖨️ Добавить свой принтер
+        </button>
+      </div>
+
+      <!-- Скрытые поля для совместимости с основным JS (не отображаются) -->
+      <div id="standardPrinterSection" class="hidden">
+        <select id="printer" hidden aria-hidden="true"><option value="100,25">default</option><option value="custom">custom</option></select>
+        <div id="customPrinterFields">
+          <input type="number" id="customPower" value="0">
+          <input type="number" id="customWear" value="0">
+        </div>
+      </div>
+
+            <div class="glass p-4 rounded-2xl space-y-4 border border-white/10">
+        <div class="text-slate-300 text-sm font-semibold">Материал</div>
+        <label class="block">
+          <span class="text-sm text-slate-300 mb-1.5 block">Вес (г)</span>
+          <input type="number" id="weight" min="0" step="0.1" placeholder="0" value="0">
+        </label>
+
+        <!-- Одиночная цена пластика (прячется при мультицвете) -->
+        <div id="singlePriceWrap">
+          <label class="block">
+            <span class="text-sm text-slate-300 mb-1.5 block">Цена пластика (<span class="currency-symbol">₽</span>/кг)</span>
+            <input type="number" id="plasticPrice" min="0" step="1" placeholder="0" value="0">
+          </label>
+        </div>
+
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-sm text-slate-300">Многоцветная печать (AMS/ACE)</span>
+          <button type="button" id="multicolorToggle" class="toggle-switch" role="switch" aria-checked="false">
+            <span class="toggle-thumb"></span>
+          </button>
+        </div>
+        <input type="checkbox" id="multicolor" class="sr-only" tabindex="-1" aria-hidden="true">
+
+        <div id="amsFields" class="ams-fields">
+          <div class="ams-fields-inner">
+            <label class="block">
+              <span class="text-sm text-slate-300 mb-1 block">Количество цветов</span>
+              <select id="colorCount">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-sm text-slate-300 mb-1 block">Слоев со сменой цвета</span>
+              <input type="number" id="colorChangeLayers" min="0" step="1" placeholder="0" value="0">
+            </label>
+            <label class="block">
+              <span class="text-sm text-slate-300 mb-1 block">Слив на 1 смену (г)</span>
+              <input type="number" id="purgePerChange" min="0" step="0.1" placeholder="0.6" value="0.6">
+            </label>
+            <label class="block">
+              <span class="text-sm text-slate-300 mb-1 block">Вес отходов (г)</span>
+              <input type="number" id="wasteWeightInput" min="0" step="0.1" placeholder="0" value="0">
+              <span class="text-slate-500 text-xs mt-1 block">Можно ввести вручную из слайсера</span>
+            </label>
+            <label class="block">
+              <span class="text-sm text-slate-300 mb-1 block">Вес башни чистки (г)</span>
+              <input type="number" id="primeTowerWeight" min="0" step="0.1" placeholder="0" value="0">
+              <span class="text-slate-500 text-xs mt-1 block">Prime Tower из слайсера</span>
+            </label>
+
+            <!-- Цены по цветам из файла -->
+            <div id="multiPriceWrap" class="hidden mt-2">
+              <div class="text-slate-300 text-sm font-semibold mb-2">Цена по цветам (<span class="currency-symbol">₽</span>/кг)</div>
+              <div id="filColorsList"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <label class="block">
+        <span class="text-sm text-slate-300 mb-1.5 block">Время (ч)</span>
+        <input type="number" id="time" min="0" step="0.1" placeholder="0" value="0">
+      </label>
+      <label class="block">
+        <span class="text-sm text-slate-300 mb-1.5 block">Тариф э/э (<span class="currency-symbol">₽</span>/кВт·ч)</span>
+        <input type="number" id="electricityRate" min="0" step="0.01" placeholder="0" value="0">
+      </label>
+      <label class="block">
+        <span class="text-sm text-slate-300 mb-1.5 block">Упаковка (<span class="currency-symbol">₽</span>)</span>
+        <input type="number" id="packaging" min="0" step="1" placeholder="0" value="0">
+      </label>
+      <label class="block">
+        <span class="text-sm text-slate-300 mb-1.5 block">Брак (%)</span>
+        <input type="number" id="defect" min="0" max="100" step="1" placeholder="4" value="0">
+      </label>
+    </div>
+
+    <div class="glass p-5">
+      <div class="text-slate-300 text-sm font-semibold mb-1 text-center">Результаты</div>
+      <div id="resultPrinterName" class="text-center text-xs text-indigo-300 mb-3" style="min-height:16px"></div>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400">Затраты</span>
+          <span id="resultResources" class="font-medium text-slate-200">0 ₽</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400">До брака</span>
+          <span id="resultBeforeDefect" class="font-medium text-slate-200">0 ₽</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400">Брак (<span id="resultDefectPct">0</span>%)</span>
+          <span id="resultDefectCost" class="font-medium text-slate-200">0 ₽</span>
+        </div>
+        <div class="border-t border-white/10 pt-2 mt-2 flex justify-between items-center">
+          <span class="text-slate-300 font-medium">Итого</span>
+          <span id="costResult" class="result-value text-lg">0 ₽</span>
+        </div>
+      </div>
+      <p id="resultNote" class="text-slate-400 text-xs mt-3 leading-snug text-center">Выберите активный принтер</p>
+    </div>
+
+    <!-- Сравнение по активным принтерам -->
+    <div id="multiPrinterResults" class="hidden glass p-5 space-y-3">
+      <div class="text-slate-300 text-sm font-semibold mb-1 text-center">📊 Сравнение принтеров</div>
+      <div id="multiPrinterTable" class="space-y-2"></div>
+      <div class="border-t border-white/10 pt-3 flex justify-between items-center">
+        <span class="text-slate-300 font-semibold text-sm">Итого (все активные)</span>
+        <span id="multiPrinterTotal" class="result-value text-lg">0 ₽</span>
+      </div>
+    </div>
+
+    <!-- Блок деталей проекта -->
+    <div id="projectBlock" class="hidden glass p-5 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-slate-300 text-sm font-semibold">🔧 Детали проекта</span>
+        <button type="button" id="projectAddPartBtn" class="modal-btn save" style="flex:none;font-size:12px;padding:6px 12px">+ Добавить деталь</button>
+      </div>
+      <div id="projectPartsList" class="space-y-2"></div>
+      <div class="project-total-row hidden" id="projectTotalRow">
+        <span class="text-slate-300 font-semibold text-sm">Итого проект</span>
+        <span id="projectTotalVal" class="result-value text-lg">0 ₽</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button type="button" id="projectSaveBtn" class="modal-btn save" style="flex:1;padding:12px">
+          💾 Сохранить проект
+        </button>
+        <button type="button" id="projectDeleteBtn" class="modal-btn delete" style="flex:0 0 auto;padding:12px 16px">
+          🗑
+        </button>
+      </div>
+    </div>
+
+    <button type="button" id="resetBtn" class="reset-btn">🔄 Сбросить все поля</button>
+  </div>
+
+  <!-- ══ ВКЛАДКА: Цена ══ -->
+  <div id="panel-price" class="hidden space-y-4">
+    <div class="glass p-5 space-y-4">
+      <label class="block">
+        <span class="text-sm text-slate-300 mb-1.5 block">Наценка (%)</span>
+        <input type="number" id="markup" min="0" step="1" placeholder="0" value="0">
+      </label>
+    </div>
+    <div class="glass p-5 text-center">
+      <div class="text-slate-300 text-sm mb-1">Цена для клиента</div>
+      <div id="pricePrinterName" class="text-xs text-indigo-300 mb-2" style="min-height:16px"></div>
+      <div id="priceResult" class="result-value">0 ₽</div>
+    </div>
+    <button type="button" id="copyBtn" class="glass-btn w-full py-3 px-4 font-semibold">
+      Скопировать расчет
+    </button>
+  </div>
+
+  <!-- ══ ВКЛАДКА: Файл ══ -->
+  <div id="panel-file" class="hidden space-y-4">
+    <div class="glass p-5 space-y-4">
+      <div class="text-slate-300 text-sm font-semibold">📁 Загрузите файл .3mf или .gcode</div>
+      <div class="flex flex-wrap gap-2">
+        <span class="sl-badge sl-bambu">Bambu Studio</span>
+        <span class="sl-badge sl-orca">OrcaSlicer</span>
+        <span class="sl-badge sl-prusa">PrusaSlicer</span>
+        <span class="sl-badge sl-cura">Cura</span>
+        <span class="sl-badge sl-creality">Creality Print</span>
+        <span class="sl-badge sl-anycubic">Anycubic Slicer</span>
+      </div>
+
+      <div id="dropZone" class="drop-zone">
+        <input type="file" id="fileInput" accept=".gcode,.3mf,.bgcode">
+        <div style="font-size:2.5rem;margin-bottom:.5rem">📤</div>
+        <div style="font-size:1rem;font-weight:600;margin-bottom:.25rem">Перетащите файл сюда</div>
+        <div style="font-size:.875rem;color:var(--text-secondary)">.3mf или .gcode — любой слайсер</div>
+      </div>
+
+      <div id="parseLoading" class="parse-loading">⏳ Читаю файл…</div>
+
+      <div id="parseResult" class="hidden space-y-3">
+        <!-- Иконка слайсера -->
+        <div id="slicerBlock" class="text-center py-2"></div>
+
+        <div class="glass rounded-2xl overflow-hidden" style="border-radius:16px">
+          <div class="text-slate-300 text-sm font-semibold px-4 pt-4 pb-2">Данные из файла</div>
+          <div class="res-row"><span class="text-slate-400">Вес модели</span><span id="pr-weight" class="font-medium text-slate-200">—</span></div>
+          <div class="res-row"><span class="text-slate-400">Время печати</span><span id="pr-time" class="font-medium text-slate-200">—</span></div>
+          <div class="res-row"><span class="text-slate-400">Цветов</span><span id="pr-colors" class="font-medium text-slate-200">—</span></div>
+          <div class="res-row"><span class="text-slate-400">Смен цвета</span><span id="pr-changes" class="font-medium text-slate-200">—</span></div>
+          <div class="res-row" style="border-bottom:none"><span class="text-slate-400">AMS/ACE</span><span id="pr-ams" class="font-medium text-slate-200">—</span></div>
+        </div>
+
+        <div id="pr-filsWrap" class="hidden">
+          <div class="text-slate-400 text-xs font-semibold mb-2 uppercase tracking-wider">Филаменты</div>
+          <div id="pr-filsList"></div>
+        </div>
+
+        <button type="button" id="applyBtn" class="w-full py-3 px-4 font-semibold text-sm"
+          style="background:linear-gradient(135deg,rgba(99,102,241,.5),rgba(79,70,229,.5));border:1px solid rgba(129,140,248,.4);color:#e0e7ff;cursor:pointer;border-radius:16px">
+          ✅ Применить в калькулятор
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="mt-8 flex flex-col gap-3">
+    <a href="https://t.me/pechatnikjurec" target="_blank" rel="noopener" class="glass-btn block text-center py-3 px-4 no-underline">📢 Канал: Печатники и Печатницы</a>
+    <a href="https://t.me/pechatnikovchat" target="_blank" rel="noopener" class="glass-btn block text-center py-3 px-4 no-underline">💬 Чат сообщества</a>
+    <a href="https://www.donationalerts.com/r/electrofighters" target="_blank" rel="noopener" class="block text-center py-3 px-4 no-underline font-semibold" style="background:linear-gradient(135deg,rgba(251,191,36,0.2),rgba(245,158,11,0.2));border:1px solid rgba(251,191,36,0.4);border-radius:16px;color:#fbbf24;">☕ Поддержать автора</a>
+    <div class="text-center text-slate-500 text-xs mt-2 pb-1">© 2025 Печатники и Печатницы · @pechatnikjurec</div>
+  </footer>
+</div>
+
+<div id="toast" class="toast glass px-4 py-3">
+  <div id="toastMsg" class="text-sm text-slate-200"></div>
+</div>
+
+<script>
+// © 2025 Печатники и Печатницы | @pechatnikjurec
+// Все права защищены. Копирование и распространение без разрешения автора запрещено.
+(function() {
+  const Telegram = window.Telegram?.WebApp;
+  if (Telegram) { Telegram.ready(); Telegram.expand(); document.documentElement.style.setProperty('--tg-theme-bg-color','transparent'); }
+
+  // ── Элементы ──────────────────────────────────────────────────────
+  const printers           = document.getElementById('printer');
+  const weight             = document.getElementById('weight');
+  const plasticPrice       = document.getElementById('plasticPrice');
+  const multicolor         = document.getElementById('multicolor');
+  const multicolorToggle   = document.getElementById('multicolorToggle');
+  const amsFields          = document.getElementById('amsFields');
+  const colorCount         = document.getElementById('colorCount');
+  const colorChangeLayers  = document.getElementById('colorChangeLayers');
+  const purgePerChange     = document.getElementById('purgePerChange');
+  const wasteWeightInput   = document.getElementById('wasteWeightInput');
+  const primeTowerWeight   = document.getElementById('primeTowerWeight');
+  const customPower        = document.getElementById('customPower');
+  const customWear         = document.getElementById('customWear');
+  const customPrinterFields= document.getElementById('customPrinterFields');
+  const time               = document.getElementById('time');
+  const electricityRate    = document.getElementById('electricityRate');
+  const packaging          = document.getElementById('packaging');
+  const defect             = document.getElementById('defect');
+  const markup             = document.getElementById('markup');
+  const costResult         = document.getElementById('costResult');
+  const resultResources    = document.getElementById('resultResources');
+  const resultBeforeDefect = document.getElementById('resultBeforeDefect');
+  const resultDefectPct    = document.getElementById('resultDefectPct');
+  const resultDefectCost   = document.getElementById('resultDefectCost');
+  const priceResult        = document.getElementById('priceResult');
+  const copyBtn            = document.getElementById('copyBtn');
+
+  // ── Валюта ────────────────────────────────────────────────────────
+  // КЛЮЧЕВОЙ ПРИНЦИП (как у тебя): все поля хранят значения В ВЫБРАННОЙ ВАЛЮТЕ.
+  // При смене валюты — пересчитываем значения в полях через курс.
+  // rubToCurrent / currentToRub — для пересчёта при смене валюты.
+
+  const CURRENCY_KEY = 'calc_currency';
+  let selectedCurrency = (function() {
+    try { const s = localStorage.getItem(CURRENCY_KEY); if (s === '₽' || s === '$' || s === '€') return s; } catch(e) {}
+    return '₽';
+  })();
+  let rateRubPerUsd = 92;
+  let rateRubPerEur = 100;
+  let rateRubPerKzt = 0.155; // ~1 KZT = 0.155 RUB (1 RUB ≈ 6.44 KZT)
+  let rateRubPerByr = 28.5;  // ~1 BYN = 28.5 RUB
+
+  // Экспортируем для модуля "Мои принтеры"
+  window._rubToCurrent = function(rub){ return rubToCurrent(rub); };
+
+  function rubToCurrent(rub) {
+    if (selectedCurrency === '$')  return rub / rateRubPerUsd;
+    if (selectedCurrency === '€')  return rub / rateRubPerEur;
+    if (selectedCurrency === '₸')  return rub / rateRubPerKzt;
+    if (selectedCurrency === 'Br') return rub / rateRubPerByr;
+    return rub;
+  }
+  function currentToRub(val) {
+    if (selectedCurrency === '$')  return val * rateRubPerUsd;
+    if (selectedCurrency === '€')  return val * rateRubPerEur;
+    if (selectedCurrency === '₸')  return val * rateRubPerKzt;
+    if (selectedCurrency === 'Br') return val * rateRubPerByr;
+    return val;
+  }
+
+  function formatMoney(value) {
+    const n = Number(value) || 0;
+    if (selectedCurrency === '₽') return Number(n.toFixed(0)).toLocaleString('ru-RU') + ' ₽';
+    if (selectedCurrency === '₸') return Number(n.toFixed(0)).toLocaleString('ru-RU') + ' ₸';
+    if (selectedCurrency === 'Br') return n.toFixed(2) + ' Br';
+    return n.toFixed(2) + ' ' + selectedCurrency;
+  }
+
+  // Поля которые надо пересчитывать при смене валюты: [элемент, знаков_после_запятой]
+  // НЕ пересчитываем: вес, время, брак, наценка, слои, слив, кол-во цветов
+  const MONEY_FIELDS = [
+    { el: plasticPrice,    dec: 1 },
+    { el: electricityRate, dec: 2 },
+    { el: packaging,       dec: 1 },
+    { el: customWear,      dec: 1 },
+  ];
+
+  function toRub(val, cur) {
+    if (cur === '$')  return val * rateRubPerUsd;
+    if (cur === '€')  return val * rateRubPerEur;
+    if (cur === '₸')  return val * rateRubPerKzt;
+    if (cur === 'Br') return val * rateRubPerByr;
+    return val;
+  }
+  function fromRub(rub, cur) {
+    if (cur === '$')  return rub / rateRubPerUsd;
+    if (cur === '€')  return rub / rateRubPerEur;
+    if (cur === '₸')  return rub / rateRubPerKzt;
+    if (cur === 'Br') return rub / rateRubPerByr;
+    return rub;
+  }
+
+  function convertMoneyFields(fromCurrency, toCurrency) {
+    MONEY_FIELDS.forEach(function(f) {
+      try {
+        if (!f.el) return;
+        const v = parseFloat(f.el.value) || 0;
+        if (v === 0) return;
+        const rub = toRub(v, fromCurrency);
+        f.el.value = parseFloat(fromRub(rub, toCurrency).toFixed(f.dec));
+      } catch(e) {}
+    });
+    filaments.forEach(function(fil, i) {
+      const inp = document.getElementById('fp-' + i);
+      if (!inp) return;
+      const v = parseFloat(inp.value) || 0;
+      if (v === 0) return;
+      const rub = toRub(v, fromCurrency);
+      const newVal = fromRub(rub, toCurrency);
+      inp.value = parseFloat(newVal.toFixed(1));
+      fil.priceInCur = parseFloat(newVal.toFixed(1));
+    });
+  }
+
+  function applyCurrencyUI() {
+    document.querySelectorAll('.currency-symbol').forEach(function(el) { el.textContent = selectedCurrency; });
+    document.querySelectorAll('.currency-btn').forEach(function(btn) {
+      const active = btn.getAttribute('data-currency') === selectedCurrency;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function fetchRates() {
+    fetch('https://open.er-api.com/v6/latest/RUB')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.rates) {
+          if (data.rates.USD > 0) rateRubPerUsd = 1 / data.rates.USD;
+          if (data.rates.EUR > 0) rateRubPerEur = 1 / data.rates.EUR;
+          if (data.rates.KZT > 0) rateRubPerKzt = 1 / data.rates.KZT;
+          if (data.rates.BYN > 0) rateRubPerByr = 1 / data.rates.BYN;
+        }
+        update();
+      }).catch(function() { update(); });
+  }
+
+  document.querySelectorAll('.currency-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const newCur = this.getAttribute('data-currency');
+      if (newCur === selectedCurrency) return;
+      try { convertMoneyFields(selectedCurrency, newCur); } catch(e) {}
+      selectedCurrency = newCur;
+      try { localStorage.setItem(CURRENCY_KEY, selectedCurrency); } catch(e) {}
+      applyCurrencyUI();
+      update();
+      saveState();
+      // Обновляем отображение проекта при смене валюты
+      if(window._projectRenderParts) window._projectRenderParts();
+    });
+  });
+
+  // ── Расчёт (точная копия твоей логики) ────────────────────────────
+  // Все значения из полей читаются В ТЕКУЩЕЙ ВАЛЮТЕ — так же как у тебя
+
+  function num(v) { return Math.max(0, parseFloat(v) || 0); }
+  function int(v) { return Math.max(0, parseInt(v, 10) || 0); }
+  let wasteWeightManual = false;
+
+  function getPrinterPowerAndAmortization() {
+    // Если есть активный "мой принтер" — используем его
+    const myP = window._getMyActivePrinterData && window._getMyActivePrinterData();
+    if(myP){
+      return { power: myP.power, amortizationPerHour: rubToCurrent(myP.wear), isCustom: true };
+    }
+    const v = printers.value;
+    if (v === 'custom') {
+      return { power: num(customPower.value), amortizationPerHour: num(customWear.value), isCustom: true };
+    }
+    const parts = v.split(',');
+    const power = num(parts[0]);
+    // Износ хранится в рублях в списке принтеров — конвертируем в текущую валюту
+    const amortRub = parts.length > 1 ? num(parts[1]) : 15;
+    return { power: power, amortizationPerHour: rubToCurrent(amortRub), isCustom: false };
+  }
+
+  function getAmortizationPerHour() {
+    const info = getPrinterPowerAndAmortization();
+    // Каждый доп. цвет добавляет +30% к базовому износу
+    // 1 цвет = ×1.0, 2 цвета = ×1.3, 3 цвета = ×1.6, 4 цвета = ×1.9 ...
+    let mult = 1.0;
+    if (multicolor.checked) {
+      const colors = int(colorCount.value);
+      mult = 1.0 + 0.3 * (colors - 1);
+    }
+    return info.amortizationPerHour * mult;
+  }
+
+  function getCalculatedWasteWeight() {
+    const colors = int(colorCount.value);
+    const layers = int(colorChangeLayers.value);
+    const purge  = num(purgePerChange.value);
+    return Math.max(0, (colors - 1) * layers) * purge;
+  }
+
+  function getWasteWeight() {
+    if (!multicolor.checked) return 0;
+    if (wasteWeightManual) return num(wasteWeightInput.value);
+    return getCalculatedWasteWeight();
+  }
+
+  // Цены по цветам (в текущей валюте)
+  let filaments = [];
+
+  function getPlasticCost(effectiveWeight) {
+    if (multicolor.checked && filaments.length > 1) {
+      // Считаем по каждому цвету отдельно
+      const sumW = filaments.reduce(function(a, f) { return a + f.weightG; }, 0);
+      const avgPrice = filaments.reduce(function(a, f) { return a + f.priceInCur; }, 0) / filaments.length;
+      let cost = 0;
+      filaments.forEach(function(f) { cost += (f.weightG / 1000) * f.priceInCur; });
+      // Отходы и башня по средней цене
+      const w = num(weight.value);
+      const waste = getWasteWeight();
+      const tower = multicolor.checked ? num(primeTowerWeight.value) : 0;
+      cost += ((waste + tower) / 1000) * avgPrice;
+      return cost;
+    }
+    return (effectiveWeight / 1000) * num(plasticPrice.value);
+  }
+
+  function getCostBreakdown() {
+    const w           = num(weight.value);
+    const waste       = getWasteWeight();
+    const tower       = multicolor.checked ? num(primeTowerWeight.value) : 0;
+    const effectiveW  = w + waste + tower;
+
+    const t          = num(time.value);
+    const rate       = num(electricityRate.value);
+    const pack       = num(packaging.value);
+    const defectPct  = int(defect.value);
+    const power      = getPrinterPowerAndAmortization().power;
+
+    const plastic      = getPlasticCost(effectiveW);
+    const electricity  = t * (power / 1000) * rate;
+    const amortization = t * getAmortizationPerHour();
+
+    const resourceCosts   = plastic + electricity + amortization;
+    const sumBeforeDefect = resourceCosts;
+    const defectCost      = sumBeforeDefect * (defectPct / 100);
+    const totalCost       = sumBeforeDefect + defectCost + pack;
+    return { resourceCosts, sumBeforeDefect, defectCost, totalCost, defectPct };
+  }
+
+  function getPrice() {
+    return getCostBreakdown().totalCost * (1 + num(markup.value) / 100);
+  }
+
+  function update() {
+    if (multicolor.checked && !wasteWeightManual) {
+      wasteWeightInput.value = getCalculatedWasteWeight().toFixed(1);
+    }
+    const b = getCostBreakdown();
+    const _actP = window._getActivePrinters ? window._getActivePrinters() : [];
+    const _myP = window._getMyActivePrinterData && window._getMyActivePrinterData();
+    // Нет активного принтера — показываем 0
+    if(_actP.length === 0 && !_myP){
+      resultResources.textContent    = formatMoney(0);
+      resultBeforeDefect.textContent = formatMoney(0);
+      resultDefectPct.textContent    = '0';
+      resultDefectCost.textContent   = formatMoney(0);
+      costResult.textContent         = formatMoney(0);
+      priceResult.textContent        = formatMoney(0);
+    } else
+    if(_actP.length >= 2){
+      // Ждём пока renderMulti посчитает итог, берём из DOM
+      setTimeout(function(){
+        const multiTotal = document.getElementById('multiPrinterTotal');
+        const totalVal = multiTotal ? multiTotal.textContent : formatMoney(b.totalCost);
+        costResult.textContent = totalVal;
+        priceResult.textContent = totalVal;
+      }, 10);
+      resultResources.textContent    = formatMoney(b.resourceCosts);
+      resultBeforeDefect.textContent = formatMoney(b.sumBeforeDefect);
+      resultDefectPct.textContent    = b.defectPct;
+      resultDefectCost.textContent   = formatMoney(b.defectCost);
+    } else {
+      resultResources.textContent    = formatMoney(b.resourceCosts);
+      resultBeforeDefect.textContent = formatMoney(b.sumBeforeDefect);
+      resultDefectPct.textContent    = b.defectPct;
+      resultDefectCost.textContent   = formatMoney(b.defectCost);
+      costResult.textContent         = formatMoney(b.totalCost);
+      priceResult.textContent        = formatMoney(getPrice());
+    }
+
+    // Показываем имя активного принтера
+    const myP = window._getMyActivePrinterData && window._getMyActivePrinterData();
+    const activePrinters = window._getActivePrinters ? window._getActivePrinters() : [];
+    const nameEl = document.getElementById('resultPrinterName');
+    const priceNameEl = document.getElementById('pricePrinterName');
+    const noteEl = document.getElementById('resultNote');
+    if(activePrinters.length > 1){
+      if(nameEl){ nameEl.textContent = ''; nameEl.style.color = ''; }
+      if(priceNameEl){ priceNameEl.textContent = '📊 итог по всем активным принтерам'; priceNameEl.style.color = ''; }
+      if(noteEl) noteEl.textContent = 'Смотрите сравнение ниже';
+    } else if(myP){
+      if(nameEl){ nameEl.textContent = '🖨️ ' + myP.name; nameEl.style.color = ''; }
+      if(priceNameEl){ priceNameEl.textContent = '🖨️ ' + myP.name; priceNameEl.style.color = ''; }
+      if(noteEl) noteEl.textContent = 'Включён износ оборудования';
+    } else {
+      if(nameEl){ nameEl.textContent = '⚠️ Принтер не выбран'; nameEl.style.color = '#f87171'; }
+      if(priceNameEl){ priceNameEl.textContent = '⚠️ Принтер не выбран'; priceNameEl.style.color = '#f87171'; }
+      if(noteEl) noteEl.textContent = 'Нажмите на принтер чтобы активировать';
+    }
+  }
+
+  // ── UI ────────────────────────────────────────────────────────────
+  function syncCustomPrinterUI() {
+    customPrinterFields.classList.toggle('hidden', printers.value !== 'custom');
+  }
+
+  function syncMulticolorUI() {
+    multicolorToggle.setAttribute('aria-checked', multicolor.checked ? 'true' : 'false');
+    amsFields.classList.toggle('ams-visible', multicolor.checked);
+    if (!multicolor.checked) wasteWeightManual = false;
+    const showMulti = multicolor.checked && filaments.length > 1;
+    document.getElementById('singlePriceWrap').classList.toggle('hidden', showMulti);
+    document.getElementById('multiPriceWrap').classList.toggle('hidden', !showMulti);
+  }
+
+  function buildFilColorsList() {
+    const list = document.getElementById('filColorsList');
+    list.innerHTML = '';
+    filaments.forEach(function(f, i) {
+      const row = document.createElement('div');
+      row.className = 'fil-row';
+      row.innerHTML =
+        '<div class="fil-dot" style="background:' + f.color + '"></div>' +
+        '<div class="fil-info"><div class="fil-name">' + f.name + '</div><div class="fil-gram">' + f.weightG.toFixed(1) + ' г</div></div>' +
+        '<div class="fil-price-wrap">' +
+        '<input type="number" class="fil-price-inp" id="fp-' + i + '" min="0" step="1" placeholder="1000" value="' + (f.priceInCur || '') + '">' +
+        '<span>/ кг</span></div>';
+      list.appendChild(row);
+      document.getElementById('fp-' + i).addEventListener('input', function() {
+        filaments[i].priceInCur = parseFloat(this.value) || 0;
+        update(); saveState();
+      });
+    });
+  }
+
+  // ── События ───────────────────────────────────────────────────────
+  function handleUserInput() { syncCustomPrinterUI(); update(); saveState(); }
+
+  [printers, weight, plasticPrice, time, electricityRate, packaging, defect, markup,
+   colorCount, colorChangeLayers, purgePerChange, wasteWeightInput, primeTowerWeight, customPower, customWear
+  ].forEach(function(el) {
+    if (!el) return;
+    el.addEventListener('input', handleUserInput);
+    el.addEventListener('change', handleUserInput);
+  });
+
+  wasteWeightInput.addEventListener('input', function() { wasteWeightManual = true; });
+  wasteWeightInput.addEventListener('change', function() { wasteWeightManual = true; });
+  [colorCount, colorChangeLayers, purgePerChange].forEach(function(el) {
+    el.addEventListener('change', function() { wasteWeightManual = false; });
+  });
+
+  multicolorToggle.addEventListener('click', function(e) {
+    e.preventDefault();
+    multicolor.checked = !multicolor.checked;
+    syncMulticolorUI(); handleUserInput();
+  });
+  multicolor.addEventListener('change', function() { syncMulticolorUI(); handleUserInput(); });
+
+  // Вкладки
+  function setTab(name) {
+    ['cost','price','file'].forEach(function(t) {
+      document.getElementById('tab-' + t).classList.toggle('active', t === name);
+      document.getElementById('panel-' + t).classList.toggle('hidden', t !== name);
+    });
+  }
+  document.getElementById('tab-cost').addEventListener('click',  function() { setTab('cost'); });
+  document.getElementById('tab-price').addEventListener('click', function() { setTab('price'); });
+  document.getElementById('tab-file').addEventListener('click',  function() { setTab('file'); });
+
+  // Сброс
+  document.getElementById('resetBtn').addEventListener('click', function() {
+    weight.value = '0'; time.value = '0'; defect.value = '0'; markup.value = '0';
+    plasticPrice.value = '0'; electricityRate.value = '0'; packaging.value = '0'; customWear.value = '0'; customPower.value = '0';
+    colorCount.value = '2'; colorChangeLayers.value = '0'; purgePerChange.value = '0.6';
+    wasteWeightInput.value = '0'; primeTowerWeight.value = '0';
+    multicolor.checked = false;
+    wasteWeightManual = false;
+    filaments = [];
+    printers.value = printers.options[0].value;
+    syncCustomPrinterUI(); syncMulticolorUI(); update(); saveState();
+    showToast('Поля сброшены');
+  });
+
+  // Копировать
+  copyBtn.addEventListener('click', function() {
+    // Если режим проекта — копируем детали проекта
+    if(window._projectMode && window._projectMode()){
+      var pparts = window._projectParts ? window._projectParts() : [];
+      var ptotal = pparts.reduce(function(s,p){return s+(p.costRub||p.cost);},0);
+      var pname = window._projectGetName ? window._projectGetName() : null;
+      var markup2 = num(document.getElementById('markup').value||'0');
+      var lines = pparts.map(function(p){
+        return '  🖨 '+p.printerName+': '+p.weight+'г, '+p.time+'ч';
+      }).join('\n');
+      var totalDisp = window._rubToCurrent ? window._rubToCurrent(ptotal*(1+markup2/100)).toFixed(2) : ptotal.toFixed(2);
+      var text = '📦 Проект'+(pname?' "'+pname+'"':'')+ ':\n'+lines+'\n💰 Итого: '+totalDisp+' '+selectedCurrency;
+      if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(function(){copyBtn.textContent='Скопировано!';setTimeout(function(){copyBtn.textContent='Скопировать расчет';},2000);}); }
+      else { fallbackCopy(text); }
+      return;
+    }
+    const w = num(weight.value), t = num(time.value), price = getPrice();
+    const disp = selectedCurrency === '₽' ? Number(price.toFixed(0)).toLocaleString('ru-RU') : price.toFixed(2);
+    const text2 = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + disp + ' ' + selectedCurrency;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text2).then(function() {
+        copyBtn.textContent = 'Скопировано!';
+        setTimeout(function() { copyBtn.textContent = 'Скопировать расчет'; }, 2000);
+      }).catch(function() { fallbackCopy(text); });
+    } else { fallbackCopy(text2); }
+  });
+  function fallbackCopy(str) {
+    const ta = document.createElement('textarea');
+    ta.value = str; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); copyBtn.textContent = 'Скопировано!'; setTimeout(function() { copyBtn.textContent = 'Скопировать расчет'; }, 2000); } catch(e) {}
+    document.body.removeChild(ta);
+  }
+
+  // Toast
+  function showToast(msg) {
+    document.getElementById('toastMsg').textContent = msg;
+    document.getElementById('toast').classList.add('toast-visible');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function() { document.getElementById('toast').classList.remove('toast-visible'); }, 2800);
+  }
+
+  // ── Парсер файлов ─────────────────────────────────────────────────
+  const PAL = ['#e74c3c','#3498db','#f1c40f','#2ecc71','#9b59b6','#e67e22','#1abc9c','#e91e63','#ff5722','#607d8b'];
+
+  const SLICER_INFO = {
+    bambu:    { icon: '🟠', label: 'Bambu Studio',    cls: 'sl-bambu' },
+    orca:     { icon: '🟢', label: 'OrcaSlicer',      cls: 'sl-orca'  },
+    prusa:    { icon: '🔵', label: 'PrusaSlicer',     cls: 'sl-prusa' },
+    cura:     { icon: '🟣', label: 'Cura',            cls: 'sl-cura'  },
+    creality: { icon: '🔴', label: 'Creality Print',  cls: 'sl-creality' },
+    anycubic: { icon: '🟡', label: 'Anycubic Slicer', cls: 'sl-anycubic' },
+    unknown:  { icon: '⬜', label: 'Слайсер не определён', cls: 'sl-unk' },
+  };
+
+  function detectSlicer(text) {
+    if (/bambu_studio|BambuStudio|X-BBL-Client/i.test(text))       return 'bambu';
+    if (/OrcaSlicer|orca_slicer|SoftFever/i.test(text))            return 'orca';
+    if (/PrusaSlicer|prusa_slicer|SuperSlicer/i.test(text))        return 'prusa';
+    if (/Cura_SteamEngine|Ultimaker Cura/i.test(text))             return 'cura';
+    if (/Creality Print|CXEngine|CRSLICE/i.test(text))             return 'creality';
+    if (/AnycubicSlicer|Anycubic_Slicer|anycubic.*slicer/i.test(text)) return 'anycubic';
+    return 'unknown';
+  }
+
+  function parsetime(s) {
+    s = (s || '').trim();
+    if (/^\d+$/.test(s)) return +s;
+    if (/\d+:\d+:\d+/.test(s)) { var p = s.match(/(\d+):(\d+):(\d+)/); return +p[1]*3600 + +p[2]*60 + +p[3]; }
+    var r = 0;
+    var h = s.match(/(\d+)\s*h/i), m = s.match(/(\d+)\s*m(?!s)/i), sc = s.match(/(\d+)\s*s/i);
+    if (h) r += +h[1]*3600; if (m) r += +m[1]*60; if (sc) r += +sc[1];
+    return r;
+  }
+
+  function parseSliceInfo(txt) {
+    var timeSec = 0, fils = [];
+    var tm = txt.match(/key="prediction"\s+value="(\d+)"/i) || txt.match(/prediction[^>]*value="(\d+)"/);
+    if (tm) timeSec = parseInt(tm[1]);
+    var matches = [];
+    var re = /<filament\b([^>]+)>/gi, m;
+    while ((m = re.exec(txt)) !== null) matches.push(m[1]);
+    matches.forEach(function(a) {
+      var wM = a.match(/used_g="([\d.]+)"/i); if (!wM || +wM[1] <= 0) return;
+      var colM = a.match(/color="(#[0-9a-fA-F]{6})"/i);
+      var typM = a.match(/type="([^"]+)"/i);
+      var idM  = a.match(/\bid="(\d+)"/i);
+      fils.push({
+        color: colM ? colM[1] : PAL[fils.length % PAL.length],
+        name: (typM ? typM[1] + ' ' : '') + 'Цвет ' + (idM ? idM[1] : fils.length + 1),
+        weightG: +wM[1],
+        priceInCur: rubToCurrent(1000)
+      });
+    });
+    return { timeSec: timeSec, fils: fils };
+  }
+
+  function parseGcodeText(txt) {
+    var timeSec = 0, fils = [], toolChanges = 0;
+    var slicer = detectSlicer(txt);
+    var t1 = txt.match(/;\s*estimated printing time(?:\s*\(normal mode\))?\s*=\s*([^\r\n;]+)/i);
+    if (t1) timeSec = parsetime(t1[1]);
+    if (!timeSec) { var t2 = txt.match(/;\s*total estimated time[:\s]+([^\r\n;]+)/i); if (t2) timeSec = parsetime(t2[1]); }
+    if (!timeSec) { var t3 = txt.match(/;\s*model printing time[:\s]+([^;\r\n]+)/i); if (t3) timeSec = parsetime(t3[1]); }
+    if (!timeSec) { var t4 = txt.match(/^;TIME:(\d+)/m); if (t4) timeSec = +t4[1]; }
+
+    var cm  = txt.match(/;\s*filament_colour\s*=\s*([^\r\n]+)/i);
+    var tm2 = txt.match(/;\s*filament_type\s*=\s*([^\r\n]+)/i);
+    var uidx= txt.match(/;\s*filament[:\s]+([\d,]+)\s*$/im);
+    var allC = cm  ? cm[1].split(/[;,]/).map(function(s){return s.trim();}) : [];
+    var allT = tm2 ? tm2[1].split(/[;,]/).map(function(s){return s.trim();}) : [];
+    var usedIdx = uidx ? uidx[1].split(',').map(function(n){return +n-1;}) : null;
+
+    var wm1 = txt.match(/;\s*filament used \[g\]\s*=\s*([^\r\n]+)/i);
+    var wm2 = txt.match(/;\s*total filament weight\s*\[g\]\s*[:\s]+([\d.,\s]+)/i);
+    var wmRaw = wm1 ? wm1[1] : (wm2 ? wm2[1] : null);
+    if (wmRaw) {
+      wmRaw.split(',').map(function(p){return +p.trim();}).filter(function(w){return w>0&&!isNaN(w);}).forEach(function(w, i) {
+        var ri = usedIdx ? usedIdx[i] : i;
+        var raw = allC[ri] || allC[i] || '';
+        var col = raw.match(/^#?[0-9a-f]{6}$/i) ? (raw.startsWith('#') ? raw : '#' + raw) : PAL[i % PAL.length];
+        var typ = allT[ri] || allT[i] || '';
+        fils.push({ color: col, name: (typ ? typ + ' ' : '') + 'Цвет ' + (i+1), weightG: w, priceInCur: rubToCurrent(1000) });
+      });
+    }
+    if (!fils.length) {
+      var wt = txt.match(/;\s*total filament weight\s*\[g\]\s*[:\s]+([\d.]+)/i);
+      if (wt) fils.push({ color: PAL[0], name: allT[0] || 'Цвет 1', weightG: +wt[1], priceInCur: rubToCurrent(1000) });
+    }
+    if (!fils.length) {
+      var wg = [];
+      var rg = /;Filament used:\s*([\d.]+)\s*g/gi, mg;
+      while ((mg = rg.exec(txt)) !== null) wg.push(mg);
+      wg.forEach(function(mg, i) { fils.push({ color: PAL[i%PAL.length], name: 'Цвет '+(i+1), weightG: +mg[1], priceInCur: rubToCurrent(1000) }); });
+    }
+    toolChanges = (txt.match(/\nT(\d+)\n/g) || []).filter(function(t) { var n=+t.trim().slice(1); return n>=0&&n<100; }).length;
+    return { timeSec: timeSec, fils: fils, slicer: slicer, toolChanges: toolChanges };
+  }
+
+  var lastParsed = null;
+
+  async function parseFile(file) {
+    var name = file.name.toLowerCase();
+    if (name.endsWith('.3mf')) {
+      var zip = await JSZip.loadAsync(file);
+      var keys = Object.keys(zip.files);
+      var texts = {};
+      for (var k of keys) {
+        if (zip.files[k].dir || /\.(png|jpg|jpeg|webp|model)$/i.test(k)) continue;
+        try { var t = await zip.files[k].async('string'); if (t.length < 5e6) texts[k] = t; } catch(e) {}
+      }
+      var allText = Object.values(texts).join('\n');
+      var slicer = detectSlicer(allText);
+      var timeSec = 0, fils = [], toolChanges = 0;
+
+      // 1. slice_info.config — приоритет
+      for (var [k, txt] of Object.entries(texts)) {
+        if (!k.includes('slice_info')) continue;
+        var r = parseSliceInfo(txt);
+        if (r.timeSec > 0) timeSec = r.timeSec;
+        if (r.fils.length > 0) fils = r.fils;
+        break;
+      }
+      // 2. GCode внутри архива
+      for (var [k, txt] of Object.entries(texts)) {
+        if (!k.endsWith('.gcode')) continue;
+        var r2 = parseGcodeText(txt);
+        if (!timeSec && r2.timeSec) timeSec = r2.timeSec;
+        if (!fils.length && r2.fils.length) fils = r2.fils;
+        toolChanges = r2.toolChanges;
+        break;
+      }
+      return { timeSec: timeSec, fils: fils, slicer: slicer, toolChanges: toolChanges };
+    } else {
+      return new Promise(function(res, rej) {
+        var reader = new FileReader();
+        reader.onload = function(e) { res(parseGcodeText(e.target.result)); };
+        reader.onerror = function() { rej(new Error('Не удалось прочитать файл')); };
+        reader.readAsText(file);
+      });
+    }
+  }
+
+  async function handleFile(file) {
+    var ext = file.name.toLowerCase().split('.').pop();
+    if (!['3mf','gcode','bgcode','g','gc'].includes(ext)) { showToast('Поддерживаются .3mf и .gcode'); return; }
+    document.getElementById('parseLoading').classList.add('visible');
+    document.getElementById('parseResult').classList.add('hidden');
+    try {
+      var r = await parseFile(file);
+      lastParsed = r;
+      var totalW = r.fils.reduce(function(a,f){return a+f.weightG;}, 0);
+      var mins   = r.timeSec ? Math.round(r.timeSec / 60) : 0;
+
+      document.getElementById('pr-weight').innerHTML  = totalW > 0 ? '<span class="hl-green">' + totalW.toFixed(1) + ' г</span>' : '—';
+      document.getElementById('pr-time').innerHTML    = mins > 0   ? '<span class="hl-green">' + mins + ' мин</span>' : '—';
+      document.getElementById('pr-colors').textContent  = r.fils.length || '—';
+      document.getElementById('pr-changes').textContent = r.toolChanges || '—';
+      document.getElementById('pr-ams').textContent     = r.fils.length > 1 ? 'да (' + r.fils.length + ' цв.)' : 'нет';
+
+      var sl = SLICER_INFO[r.slicer] || SLICER_INFO.unknown;
+      document.getElementById('slicerBlock').innerHTML =
+        '<div style="font-size:3rem;line-height:1;margin-bottom:6px">' + sl.icon + '</div>' +
+        '<span class="sl-badge ' + sl.cls + '">' + sl.label + '</span>';
+
+      if (r.fils.length > 0) {
+        var list = document.getElementById('pr-filsList');
+        list.innerHTML = '';
+        r.fils.forEach(function(f) {
+          var row = document.createElement('div');
+          row.className = 'fil-row';
+          row.innerHTML = '<div class="fil-dot" style="background:' + f.color + '"></div><div class="fil-info"><div class="fil-name">' + f.name + '</div><div class="fil-gram">' + f.weightG.toFixed(1) + ' г</div></div>';
+          list.appendChild(row);
+        });
+        document.getElementById('pr-filsWrap').classList.remove('hidden');
+      } else {
+        document.getElementById('pr-filsWrap').classList.add('hidden');
+      }
+
+      document.getElementById('parseResult').classList.remove('hidden');
+      showToast('Файл прочитан' + (totalW > 0 ? ': ' + totalW.toFixed(1) + ' г' : '') + (mins > 0 ? ', ' + mins + ' мин' : ''));
+    } catch(e) {
+      showToast('Ошибка: ' + (e.message || 'не удалось прочитать'));
+    } finally {
+      document.getElementById('parseLoading').classList.remove('visible');
+    }
+  }
+
+  document.getElementById('applyBtn').addEventListener('click', function() {
+    if (!lastParsed) { showToast('Сначала загрузите файл'); return; }
+    var r = lastParsed;
+    var totalW = r.fils.reduce(function(a,f){return a+f.weightG;}, 0);
+    if (totalW > 0) weight.value = totalW.toFixed(1);
+    if (r.timeSec > 0) time.value = (r.timeSec / 3600).toFixed(2);
+
+    if (r.fils.length > 1) {
+      multicolor.checked = true;
+      colorCount.value = Math.min(r.fils.length, 8);
+      filaments = r.fils.map(function(f) { return { color: f.color, name: f.name, weightG: f.weightG, priceInCur: rubToCurrent(1000) }; });
+      buildFilColorsList();
+    } else {
+      multicolor.checked = false;
+      filaments = [];
+    }
+    syncMulticolorUI(); update(); saveState();
+    setTab('cost');
+    showToast('Применено! Укажи цены на пластик.');
+  });
+
+  var dropZone = document.getElementById('dropZone');
+  var fileInput = document.getElementById('fileInput');
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', function(e) { e.preventDefault(); dropZone.classList.remove('drag-over'); var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) handleFile(f); });
+  fileInput.addEventListener('change', function() { if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+  // ── Сохранение состояния ──────────────────────────────────────────
+  const STATE_KEY = 'calc_state_v5';
+
+  function saveState() {
+    try {
+      localStorage.setItem(STATE_KEY, JSON.stringify({
+        printer: printers.value, weight: weight.value, plasticPrice: plasticPrice.value,
+        time: time.value, electricityRate: electricityRate.value, packaging: packaging.value,
+        defect: defect.value, markup: markup.value, multicolor: multicolor.checked,
+        colorCount: colorCount.value, colorChangeLayers: colorChangeLayers.value,
+        purgePerChange: purgePerChange.value, wasteWeightInput: wasteWeightInput.value,
+        primeTowerWeight: primeTowerWeight.value, customPower: customPower.value, customWear: customWear.value,
+        currency: selectedCurrency,
+        filaments: filaments.map(function(f){return {color:f.color,name:f.name,weightG:f.weightG,priceInCur:f.priceInCur};})
+      }));
+    } catch(e) {}
+  }
+
+  function loadState() {
+    try {
+      var s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
+      if (!s) return;
+      if (s.printer)              printers.value = s.printer;
+      if (s.weight != null)       weight.value = s.weight;
+      if (s.plasticPrice != null) plasticPrice.value = s.plasticPrice;
+      if (s.time != null)         time.value = s.time;
+      if (s.electricityRate != null) electricityRate.value = s.electricityRate;
+      if (s.packaging != null)    packaging.value = s.packaging;
+      if (s.defect != null)       defect.value = s.defect;
+      if (s.markup != null)       markup.value = s.markup;
+      if (typeof s.multicolor === 'boolean') multicolor.checked = s.multicolor;
+      if (s.colorCount)           colorCount.value = s.colorCount;
+      if (s.colorChangeLayers != null) colorChangeLayers.value = s.colorChangeLayers;
+      if (s.purgePerChange != null)    purgePerChange.value = s.purgePerChange;
+      if (s.wasteWeightInput != null)  wasteWeightInput.value = s.wasteWeightInput;
+      if (s.primeTowerWeight != null)  primeTowerWeight.value = s.primeTowerWeight;
+      if (s.customPower != null)  customPower.value = s.customPower;
+      if (s.customWear != null)   customWear.value = s.customWear;
+      if (s.currency)             selectedCurrency = s.currency;
+      if (Array.isArray(s.filaments)) filaments = s.filaments;
+    } catch(e) {}
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────
+  loadState();
+  applyCurrencyUI();
+  syncCustomPrinterUI();
+  syncMulticolorUI();
+  if (filaments.length > 1 && multicolor.checked) buildFilColorsList();
+  update();
+  fetchRates();
+  // Экспортируем update для модуля принтеров
+  window._mainUpdate = update;
+
+})();
+
+// ── МОИ ПРИНТЕРЫ ──────────────────────────────────────────────
+(function(){
+  var KEY = 'my_printers_v2';
+  var MAX = 50;
+  var printers = [];
+
+  // localStorage с fallback для локального открытия файлов
+  var _mem = null;
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return _mem; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){ _mem=v; } }
+
+  function load(){
+    try{
+      printers = JSON.parse(lsGet(KEY)) || [];
+      // Сбрасываем active у всех — пользователь сам активирует нужные
+      // Только для первой загрузки новой версии
+      printers.forEach(function(p){ p.active = false; });
+    }catch(e){ printers = []; }
+  }
+  function save(){ try{ lsSet(KEY, JSON.stringify(printers)); }catch(e){ console.warn('save failed',e); } }
+  function active(){ return printers.filter(function(p){ return p.active; }); }
+
+  function render(){
+    var sec    = document.getElementById('myPrintersSection');
+    var list   = document.getElementById('myPrintersList');
+    var stdSec = document.getElementById('standardPrinterSection');
+    var banner = null;
+    var cnt    = document.getElementById('activePrinterCount');
+    var multi  = document.getElementById('multiPrinterResults');
+
+    if(!sec || !list) return;
+
+    if(printers.length === 0){
+      sec.classList.add('hidden');
+      if(stdSec) stdSec.classList.remove('hidden');
+
+      window._myActivePrinter = null;
+      if(multi) multi.classList.add('hidden');
+      if(window._mainUpdate) window._mainUpdate();
+      return;
+    }
+
+    // Есть свои принтеры — прячем стандартный и banner (кнопка внутри секции)
+    sec.classList.remove('hidden');
+    if(stdSec) stdSec.classList.add('hidden');
+    if(banner) banner.classList.add('hidden');
+
+    var act = active();
+    if(cnt) cnt.textContent = act.length + ' активн' + (act.length===1?'ый':'ых');
+
+    list.innerHTML = '';
+    printers.forEach(function(p){
+      var div = document.createElement('div');
+      div.className = 'my-printer-card' + (p.active ? ' active' : '');
+      div.innerHTML =
+        '<div class="printer-active-dot"></div>' +
+        '<div class="printer-name">' + esc(p.name) + '</div>' +
+        '<div class="printer-meta">' + p.power + 'Вт · ' + p.wear + '₽/ч</div>' +
+        '<button class="printer-gear-btn" type="button">⚙️</button>';
+
+      div.querySelector('.printer-gear-btn').addEventListener('click', function(e){
+        e.stopPropagation();
+        openModal(p.id);
+      });
+
+      div.addEventListener('click', function(){
+        var a = active();
+        if(!p.active && a.length >= 8){ toast('Максимум 8 активных'); return; }
+        p.active = !p.active;
+        save();
+        render();
+        syncCalc();
+      });
+
+      list.appendChild(div);
+    });
+
+    syncCalc();
+  }
+
+  function syncCalc(){
+    var act = active();
+    window._myActivePrinter = act.length > 0 ? act[0] : null;
+    window._activeCount = act.length;
+    renderMulti();
+    if(window._mainUpdate) window._mainUpdate();
+  }
+
+  function renderMulti(){
+    var act   = active();
+    var block = document.getElementById('multiPrinterResults');
+    var table = document.getElementById('multiPrinterTable');
+    var total = document.getElementById('multiPrinterTotal');
+    if(!block) return;
+
+    if(act.length < 2){ block.classList.add('hidden'); return; }
+    block.classList.remove('hidden');
+
+    var results = act.map(function(p){ return { p:p, cost: calcFor(p) }; });
+    var minC = Math.min.apply(null, results.map(function(r){ return r.cost; }));
+
+    table.innerHTML = '';
+    var sum = 0;
+    results.forEach(function(r){
+      sum += r.cost;
+      var cheap = Math.abs(r.cost - minC) < 0.01;
+      var row = document.createElement('div');
+      row.className = 'compare-row' + (cheap ? ' cheapest' : '');
+      row.innerHTML =
+        '<span class="compare-name">' + esc(r.p.name) + (cheap ? '<span class="compare-cheapest-badge"> ✓</span>' : '') + '</span>' +
+        '<span class="compare-cost">' + fmt(r.cost) + '</span>';
+      table.appendChild(row);
+    });
+    if(total) total.textContent = fmt(sum);
+  }
+
+  function calcFor(p){
+    function n(id){ var e=document.getElementById(id); return e ? parseFloat(e.value)||0 : 0; }
+    function i(id){ var e=document.getElementById(id); return e ? parseInt(e.value)||0 : 0; }
+    var w    = n('weight'), t = n('time'), rate = n('electricityRate');
+    var pack = n('packaging'), def = i('defect'), plastic = n('plasticPrice');
+    var mc   = document.getElementById('multicolor');
+    var mult = (mc && mc.checked) ? Math.max(1, 1 + 0.3*(i('colorCount')-1)) : 1;
+    var cost = (w/1000)*plastic + t*(p.power/1000)*rate + t*p.wear*mult;
+    return cost + cost*(def/100) + pack;
+  }
+
+  function fmt(v){
+    return v.toFixed(2).replace(/\.00$/,'') + ' ₽';
+  }
+
+  // ── МОДАЛКА ──────────────────────────────────────────────────
+  var PRESETS = [
+    {name:'Anycubic Kobra 3 / S1 Combo', power:100, wear:25},
+    {name:'Bambu Lab P2S',               power:110, wear:35},
+    {name:'Bambu Lab P1P / P1S',         power:110, wear:40},
+    {name:'Bambu Lab X1-Carbon',         power:110, wear:50},
+    {name:'Bambu Lab A1',                power:95,  wear:25},
+    {name:'Bambu Lab A1 mini',           power:80,  wear:25},
+    {name:'Flashforge Adventurer 5M/Pro',power:150, wear:25},
+    {name:'Creality K1 / K1 Max / K1C', power:100, wear:35},
+    {name:'Creality Ender-3 V3',         power:100, wear:21},
+    {name:'Anycubic Kobra 2 Neo',        power:100, wear:21},
+    {name:'Anycubic Kobra 2 Max',        power:600, wear:45},
+    {name:'Elegoo OrangeStorm Giga',     power:1800,wear:90},
+    {name:'Elegoo Neptune 4 Max',        power:450, wear:35},
+    {name:'Flashforge (Универсальный)',  power:130, wear:25},
+    {name:'Prusa MK4S',                  power:80,  wear:28}
+  ];
+
+  function openModal(editId){
+    var pr = editId ? printers.find(function(x){ return x.id===editId; }) : null;
+    var isNew = !pr;
+
+    var presOpts = '<option value="">— выбрать из списка —</option>' +
+      PRESETS.map(function(x){
+        return '<option value="'+x.power+'|'+x.wear+'|'+esc(x.name)+'">'+esc(x.name)+' ('+x.power+'Вт · '+x.wear+'₽/ч)</option>';
+      }).join('');
+
+    var ov = document.createElement('div');
+    ov.className = 'printer-modal-overlay';
+    ov.innerHTML =
+      '<div class="printer-modal" id="pm-box">' +
+        '<h3>' + (isNew ? '➕ Новый принтер' : '⚙️ Редактировать') + '</h3>' +
+        (isNew ? '<label><div class="field-label">Выбрать из списка</div><select id="pm-preset">'+presOpts+'</select></label>' : '') +
+        '<label><div class="field-label">Название</div><input id="pm-name" type="text" maxlength="40" placeholder="Мой принтер" value="'+esc(pr?pr.name:'')+'"></label>' +
+        '<label><div class="field-label">Мощность (Вт)</div><input id="pm-power" type="number" min="1" max="9999" placeholder="100" value="'+(pr?pr.power:'')+'"></label>' +
+        '<label><div class="field-label">Износ в час (₽)</div><input id="pm-wear" type="number" min="0" max="9999" placeholder="25" value="'+(pr?pr.wear:'')+'"></label>' +
+        '<div class="modal-actions">' +
+          '<button id="pm-cancel" class="modal-btn cancel" type="button">Отмена</button>' +
+          (isNew ? '' : '<button id="pm-delete" class="modal-btn delete" type="button">🗑</button>') +
+          '<button id="pm-save" class="modal-btn save" type="button">💾 Сохранить</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(ov);
+
+    var box   = ov.querySelector('#pm-box');
+    var inpN  = ov.querySelector('#pm-name');
+    var inpP  = ov.querySelector('#pm-power');
+    var inpW  = ov.querySelector('#pm-wear');
+    var sel   = ov.querySelector('#pm-preset');
+    var btnS  = ov.querySelector('#pm-save');
+    var btnC  = ov.querySelector('#pm-cancel');
+    var btnD  = ov.querySelector('#pm-delete');
+
+    setTimeout(function(){ inpN.focus(); }, 50);
+
+    if(sel){
+      sel.addEventListener('change', function(){
+        var parts = this.value.split('|');
+        if(parts.length < 3) return;
+        inpP.value = parts[0];
+        inpW.value = parts[1];
+        inpN.value = parts[2];
+      });
+    }
+
+    btnC.addEventListener('click', function(){ ov.remove(); });
+    ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+
+    btnS.addEventListener('click', function(){
+      var name  = inpN.value.trim();
+      var power = parseFloat(inpP.value) || 0;
+      var wear  = parseFloat(inpW.value) || 0;
+      if(!name)     { toast('Введите название'); return; }
+      if(power < 1) { toast('Введите мощность'); return; }
+      if(isNew){
+        if(printers.length >= MAX){ toast('Максимум 50 принтеров'); return; }
+        printers.push({ id: String(Date.now()), name:name, power:power, wear:wear, active:false });
+      } else {
+        pr.name=name; pr.power=power; pr.wear=wear;
+      }
+      save();
+      ov.remove();
+      render();
+      toast('Принтер сохранён ✓');
+    });
+
+    if(btnD){
+      btnD.addEventListener('click', function(){
+        ov.remove();
+        confirm_(editId);
+      });
+    }
+  }
+
+  function confirm_(id){
+    var pr = printers.find(function(x){ return x.id===id; });
+    if(!pr) return;
+    var ov = document.createElement('div');
+    ov.className = 'confirm-overlay';
+    ov.innerHTML =
+      '<div class="confirm-box">' +
+        '<div class="confirm-icon">🗑️</div>' +
+        '<h4>Удалить принтер?</h4>' +
+        '<p>"' + esc(pr.name) + '" будет удалён</p>' +
+        '<div class="confirm-btns">' +
+          '<button class="modal-btn cancel" id="cn-no" type="button">Отмена</button>' +
+          '<button class="modal-btn delete" id="cn-yes" type="button">Удалить</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#cn-no').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#cn-yes').addEventListener('click', function(){
+      printers = printers.filter(function(x){ return x.id!==id; });
+      save(); ov.remove(); render();
+    });
+  }
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function toast(msg){
+    var t=document.getElementById('toast'), m=document.getElementById('toastMsg');
+    if(m) m.textContent=msg; else if(t) t.textContent=msg;
+    if(t){ t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(function(){ t.classList.remove('show'); },3000); }
+  }
+
+  // Экспорт
+  window._getMyActivePrinterData = function(){ return window._myActivePrinter || null; };
+  window._getActivePrinters      = function(){ return active(); };
+  window._triggerUpdate          = function(){ syncCalc(); };
+  window._renderPrinters         = function(){ render(); };
+  window._deactivateAllPrinters  = function(){ printers.forEach(function(p){p.active=false;}); save(); render(); };
+
+  // Кнопки добавить — внутри секции и banner снаружи
+  var addBtn = document.getElementById('addPrinterBtn');
+  if(addBtn) addBtn.addEventListener('click', function(){ openModal(null); });
+
+
+  // Слушаем поля калькулятора
+  ['weight','time','electricityRate','packaging','defect','plasticPrice','colorCount'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('input', function(){ renderMulti(); });
+  });
+
+  // Старт
+  load();
+  render();
+
+})();
+</script>
+<script>
+// ── РЕЖИМ ПРОЕКТ ──────────────────────────────────────────────
+(function(){
+  var projectMode = false;
+  var parts = [];
+  var currentProjectId = null; // id текущего редактируемого проекта
+  var PROJ_KEY = 'projects_v1';
+
+  function fmt(v){ return (parseFloat(v)||0).toFixed(2).replace(/\.00$/,'') + ' ₽'; }
+  function nv(id){ var e=document.getElementById(id); return e?parseFloat(e.value)||0:0; }
+  function iv(id){ var e=document.getElementById(id); return e?parseInt(e.value)||0:0; }
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function toast(msg){
+    var t=document.getElementById('toast'),m=document.getElementById('toastMsg');
+    if(m)m.textContent=msg; if(t){t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove('show');},3000);}
+  }
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+  function loadProjects(){ try{ return JSON.parse(lsGet(PROJ_KEY))||[]; }catch(e){ return []; } }
+  function saveProjects(list){ lsSet(PROJ_KEY, JSON.stringify(list)); }
+
+  function calcCost(printer){
+    var w=nv('weight'),t=nv('time'),rate=nv('electricityRate');
+    var pack=nv('packaging'),def=iv('defect'),plastic=nv('plasticPrice');
+    var mc=document.getElementById('multicolor');
+    var ams=mc&&mc.checked;
+    var mult=ams?Math.max(1,1+0.3*(iv('colorCount')-1)):1;
+    var cost=(w/1000)*plastic + t*(printer.power/1000)*rate + t*printer.wear*mult;
+    return cost+cost*(def/100)+pack;
+  }
+
+  function clearFields(){
+    ['weight','time','electricityRate','packaging','defect','plasticPrice'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.value='0';
+    });
+    var mc=document.getElementById('multicolor'); if(mc) mc.checked=false;
+    if(window._mainUpdate) window._mainUpdate();
+  }
+
+  function projectTotal(){
+    return parts.reduce(function(s,p){return s+p.cost;},0);
+  }
+
+  function fmtCur(rubVal){
+    // Конвертируем из рублей в текущую валюту для отображения
+    var conv = window._rubToCurrent ? window._rubToCurrent(rubVal) : rubVal;
+    var cur = document.querySelector('.currency-btn.active');
+    var sym = cur ? cur.getAttribute('data-currency') : '₽';
+    if(sym==='₽') return Number(conv.toFixed(0)).toLocaleString('ru-RU')+' ₽';
+    if(sym==='₸') return Number(conv.toFixed(0)).toLocaleString('ru-RU')+' ₸';
+    return conv.toFixed(2)+' '+sym;
+  }
+
+  function getProjectName(){
+    if(!currentProjectId) return null;
+    try{
+      var list=loadProjects();
+      var p=list.find(function(x){return x.id===currentProjectId;});
+      return p?p.name:null;
+    }catch(e){return null;}
+  }
+
+  function renderParts(){
+    var list=document.getElementById('projectPartsList');
+    var totalRow=document.getElementById('projectTotalRow');
+    var totalVal=document.getElementById('projectTotalVal');
+    if(!list) return;
+    list.innerHTML='';
+    var sum=0;
+    parts.forEach(function(p){
+      sum+=p.costRub||p.cost; // используем costRub если есть
+      var card=document.createElement('div');
+      card.className='project-part-card';
+      var amsTag=p.ams?' · АМС':'';
+      card.innerHTML=
+        '<div style="flex:1;min-width:0">'+
+          '<div class="project-part-printer">🖨 '+esc(p.printerName)+'</div>'+
+          '<div class="project-part-meta">'+p.weight+'г · '+p.time+'ч · '+p.plastic+'₽/кг'+amsTag+'</div>'+
+        '</div>'+
+        '<div class="project-part-cost">'+fmtCur(p.costRub||p.cost)+'</div>'+
+        '<button class="printer-gear-btn ep-edit" type="button" style="margin-left:4px;flex-shrink:0">✏️</button>';
+      card.querySelector('.ep-edit').addEventListener('click',function(e){
+        e.stopPropagation(); openEditModal(p.id);
+      });
+      list.appendChild(card);
+    });
+    if(totalRow){
+      if(parts.length>0){
+        totalRow.classList.remove('hidden');
+        if(totalVal) totalVal.textContent=fmtCur(sum);
+      } else {
+        totalRow.classList.add('hidden');
+      }
+    }
+    // Обновляем вкладку Цена
+    var pr=document.getElementById('priceResult');
+    var markup=parseFloat((document.getElementById('markup')||{}).value)||0;
+    if(pr && projectMode) pr.textContent=fmtCur(sum*(1+markup/100));
+    // ── ФИКС 3: показываем название проекта
+    var pn=document.getElementById('pricePrinterName');
+    if(pn && projectMode){
+      var projName=getProjectName();
+      pn.textContent=projName?'🔧 '+projName:'🔧 Итого по проекту';
+    }
+  }
+
+  function openEditModal(id){
+    var p=parts.find(function(x){return x.id===id;}); if(!p) return;
+    var ov=document.createElement('div');
+    ov.className='printer-modal-overlay';
+    ov.innerHTML='<div class="printer-modal">'+
+      '<h3>✏️ '+esc(p.printerName)+'</h3>'+
+      '<label><div class="field-label">Вес (г)</div><input id="ep-w" type="number" value="'+p.weight+'"></label>'+
+      '<label><div class="field-label">Время (ч)</div><input id="ep-t" type="number" value="'+p.time+'"></label>'+
+      '<label><div class="field-label">Пластик (₽/кг)</div><input id="ep-pl" type="number" value="'+p.plastic+'"></label>'+
+      '<label><div class="field-label">Тариф э/э (₽/кВт·ч)</div><input id="ep-el" type="number" value="'+p.electricity+'"></label>'+
+      '<label><div class="field-label">Упаковка (₽)</div><input id="ep-pk" type="number" value="'+p.packaging+'"></label>'+
+      '<label><div class="field-label">Брак (%)</div><input id="ep-df" type="number" value="'+p.defect+'"></label>'+
+      '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+        '<div class="field-label" style="margin:0">Многоцветная печать (АМС)</div>'+
+        '<input id="ep-ams" type="checkbox"'+(p.ams?' checked':'')+' style="width:20px;height:20px;flex-shrink:0">'+
+      '</label>'+
+      '<label id="ep-colors-wrap" style="'+(p.ams?'':'display:none')+'"><div class="field-label">Количество цветов</div><input id="ep-cc" type="number" min="2" max="16" value="'+(p.colorCount||2)+'"></label>'+
+      '<div class="modal-actions">'+
+        '<button class="modal-btn cancel" id="ep-cancel" type="button">Отмена</button>'+
+        '<button class="modal-btn delete" id="ep-del" type="button">🗑</button>'+
+        '<button class="modal-btn save" id="ep-save" type="button">💾 Сохранить</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    // Показ/скрытие кол-ва цветов
+    ov.querySelector('#ep-ams').addEventListener('change',function(){
+      ov.querySelector('#ep-colors-wrap').style.display=this.checked?'':'none';
+    });
+    ov.querySelector('#ep-cancel').addEventListener('click',function(){ov.remove();});
+    ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+    ov.querySelector('#ep-del').addEventListener('click',function(){
+      parts=parts.filter(function(x){return x.id!==id;}); ov.remove(); renderParts();
+    });
+    ov.querySelector('#ep-save').addEventListener('click',function(){
+      var w=parseFloat(ov.querySelector('#ep-w').value)||0;
+      var t=parseFloat(ov.querySelector('#ep-t').value)||0;
+      var pl=parseFloat(ov.querySelector('#ep-pl').value)||0;
+      var el=parseFloat(ov.querySelector('#ep-el').value)||0;
+      var pk=parseFloat(ov.querySelector('#ep-pk').value)||0;
+      var df=parseFloat(ov.querySelector('#ep-df').value)||0;
+      var ams=ov.querySelector('#ep-ams').checked;
+      var cc=parseInt(ov.querySelector('#ep-cc').value)||2;
+      var mult=ams?Math.max(1,1+0.3*(cc-1)):1;
+      var cost=(w/1000)*pl + t*(p.power/1000)*el + t*p.wear*mult;
+      cost=cost+cost*(df/100)+pk;
+      p.weight=w;p.time=t;p.plastic=pl;p.electricity=el;p.packaging=pk;p.defect=df;p.ams=ams;p.colorCount=cc;p.cost=cost;
+      ov.remove(); renderParts();
+    });
+  }
+
+  function openSaveModal(){
+    var ov=document.createElement('div');
+    ov.className='printer-modal-overlay';
+    var existing=loadProjects();
+    var cur=currentProjectId?existing.find(function(x){return x.id===currentProjectId;}):null;
+    ov.innerHTML='<div class="printer-modal">'+
+      '<h3>💾 Сохранить проект</h3>'+
+      '<label><div class="field-label">Название проекта</div>'+
+        '<input id="proj-name" type="text" placeholder="Мой проект" value="'+(cur?esc(cur.name):'')+'">'+
+      '</label>'+
+      '<div class="modal-actions">'+
+        '<button class="modal-btn cancel" id="ps-cancel" type="button">Отмена</button>'+
+        '<button class="modal-btn save" id="ps-save" type="button">💾 Сохранить</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    setTimeout(function(){ var inp=ov.querySelector('#proj-name'); if(inp) inp.focus(); },100);
+    ov.querySelector('#ps-cancel').addEventListener('click',function(){ov.remove();});
+    ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+    ov.querySelector('#ps-save').addEventListener('click',function(){
+      var name=ov.querySelector('#proj-name').value.trim()||'Проект';
+      var list=loadProjects();
+      if(currentProjectId){
+        var idx=list.findIndex(function(x){return x.id===currentProjectId;});
+        if(idx>=0){ list[idx].name=name; list[idx].parts=parts; list[idx].updated=Date.now(); }
+        else { list.push({id:currentProjectId,name:name,parts:parts,updated:Date.now()}); }
+      } else {
+        currentProjectId=String(Date.now());
+        list.push({id:currentProjectId,name:name,parts:parts,updated:Date.now()});
+      }
+      saveProjects(list);
+      ov.remove();
+      toast('Проект "'+name+'" сохранён ✓');
+    });
+  }
+
+  function openMyProjects(){
+    var list=loadProjects();
+    var ov=document.createElement('div');
+    ov.className='printer-modal-overlay';
+    var rows=list.length?list.map(function(p){
+      var total=p.parts.reduce(function(s,x){return s+x.cost;},0);
+      var d=new Date(p.updated); var ds=d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear();
+      return '<div class="project-part-card" style="margin-bottom:8px" data-pid="'+p.id+'">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div class="project-part-printer">'+esc(p.name)+'</div>'+
+          '<div class="project-part-meta">'+p.parts.length+' дет. · '+ds+'</div>'+
+        '</div>'+
+        '<div class="project-part-cost">'+fmt(total)+'</div>'+
+        '<button class="printer-gear-btn proj-open" type="button" style="margin-left:4px">📂</button>'+
+        '<button class="printer-gear-btn proj-del" type="button" style="margin-left:2px">🗑</button>'+
+      '</div>';
+    }).join(''):'<div style="color:#64748b;text-align:center;padding:16px">Сохранённых проектов нет</div>';
+    ov.innerHTML='<div class="printer-modal">'+
+      '<h3>📂 Мои проекты</h3>'+
+      '<div id="proj-list">'+rows+'</div>'+
+      '<div class="modal-actions">'+
+        '<button class="modal-btn cancel" id="mp-close" type="button">Закрыть</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#mp-close').addEventListener('click',function(){ov.remove();});
+    ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+    ov.querySelectorAll('.proj-open').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var pid=this.closest('[data-pid]').getAttribute('data-pid');
+        var list2=loadProjects();
+        var proj=list2.find(function(x){return x.id===pid;});
+        if(!proj) return;
+        ov.remove();
+        if(!projectMode) enterProjectMode(true);
+        parts=proj.parts;
+        currentProjectId=proj.id;
+        renderParts();
+        toast('Проект "'+proj.name+'" загружен');
+      });
+    });
+    ov.querySelectorAll('.proj-del').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var pid=this.closest('[data-pid]').getAttribute('data-pid');
+        var list2=loadProjects();
+        var proj=list2.find(function(x){return x.id===pid;});
+        if(!proj) return;
+        if(!confirm('Удалить проект "'+proj.name+'"?')) return;
+        saveProjects(list2.filter(function(x){return x.id!==pid;}));
+        if(currentProjectId===pid){ currentProjectId=null; parts=[]; renderParts(); }
+        ov.remove(); openMyProjects();
+      });
+    });
+  }
+
+  function confirmDeleteProject(){
+    var ov=document.createElement('div');
+    ov.className='confirm-overlay';
+    ov.innerHTML='<div class="confirm-box">'+
+      '<div class="confirm-icon">🗑️</div>'+
+      '<h4>Удалить текущий проект?</h4>'+
+      '<p>Все детали будут сброшены</p>'+
+      '<div class="confirm-btns">'+
+        '<button class="modal-btn cancel" id="cd-no" type="button">Отмена</button>'+
+        '<button class="modal-btn delete" id="cd-yes" type="button">Удалить</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#cd-no').addEventListener('click',function(){ov.remove();});
+    ov.querySelector('#cd-yes').addEventListener('click',function(){
+      parts=[]; currentProjectId=null;
+      renderParts(); ov.remove();
+      // Удаляем из сохранённых если был сохранён
+      if(currentProjectId){
+        var list=loadProjects();
+        saveProjects(list.filter(function(x){return x.id!==currentProjectId;}));
+      }
+      exitProjectMode();
+      toast('Проект удалён');
+    });
+  }
+
+  function enterProjectMode(silent){
+    projectMode=true;
+    parts=[];
+    currentProjectId=null;
+    document.body.classList.add('project-mode');
+    document.getElementById('projectBlock').classList.remove('hidden');
+    if(window._deactivateAllPrinters) window._deactivateAllPrinters();
+    clearFields();
+    renderParts();
+    if(!silent) toast('Режим Проект — выберите принтер и введите данные');
+  }
+
+  function exitProjectMode(){
+    projectMode=false;
+    document.body.classList.remove('project-mode');
+    document.getElementById('projectBlock').classList.add('hidden');
+    var pn=document.getElementById('pricePrinterName');
+    if(pn) pn.textContent='';
+    renderParts();
+  }
+
+  document.getElementById('projectModeBtn').addEventListener('click',function(){
+    if(projectMode) exitProjectMode(); else enterProjectMode();
+  });
+  document.getElementById('myProjectsBtn').addEventListener('click',function(){
+    openMyProjects();
+  });
+  document.getElementById('projectSaveBtn').addEventListener('click',function(){
+    if(parts.length===0){ toast('Нет деталей для сохранения'); return; }
+    openSaveModal();
+  });
+  document.getElementById('projectDeleteBtn').addEventListener('click',function(){
+    confirmDeleteProject();
+  });
+  document.getElementById('projectAddPartBtn').addEventListener('click',function(){
+    if(!projectMode) return;
+    var printer=window._getMyActivePrinterData&&window._getMyActivePrinterData();
+    if(!printer){ toast('Выберите принтер из списка'); return; }
+    var mc=document.getElementById('multicolor');
+    var ams=mc&&mc.checked;
+    var cc=iv('colorCount');
+    var cost=calcCost(printer);
+    // Конвертируем cost обратно в рубли для хранения
+    var costRub = window._rubToCurrent ? cost / (window._rubToCurrent(1)||1) * 1 : cost;
+    // Если текущая валюта рубли, costRub = cost
+    var curBtn = document.querySelector('.currency-btn.active');
+    var curSym = curBtn ? curBtn.getAttribute('data-currency') : '₽';
+    if(curSym === '₽') costRub = cost;
+    parts.push({
+      id:String(Date.now()),
+      printerId:printer.id, printerName:printer.name,
+      power:printer.power, wear:printer.wear,
+      weight:nv('weight'), time:nv('time'),
+      plastic:nv('plasticPrice'), electricity:nv('electricityRate'),
+      packaging:nv('packaging'), defect:iv('defect'),
+      ams:ams, colorCount:cc, cost:cost, costRub:costRub
+    });
+    renderParts();
+    clearFields();
+    if(window._deactivateAllPrinters) window._deactivateAllPrinters();
+    toast('Деталь добавлена — выберите следующий принтер');
+  });
+
+  // Обновляем цену в вкладке Цена при изменении наценки в режиме проекта
+  var markupEl=document.getElementById('markup');
+  if(markupEl) markupEl.addEventListener('input',function(){
+    if(projectMode) renderParts();
+  });
+
+  // Экспорт для других модулей
+  window._projectRenderParts = function(){ if(projectMode) renderParts(); };
+  window._projectMode        = function(){ return projectMode; };
+  window._projectParts       = function(){ return parts; };
+  window._projectGetName     = function(){ return getProjectName(); };
+
+})();
+</script>

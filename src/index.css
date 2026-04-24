@@ -1,0 +1,136 @@
+@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light soft-UI */
+    --bg: 230 232 240;         /* #e6e8f0 — page */
+    --surface: 230 232 240;    /* panels same as bg (soft-UI lift via shadow) */
+    --ink: 33 37 52;           /* #212534 */
+    --muted: 116 124 141;
+    --accent: 79 111 237;      /* blue */
+    --accent2: 38 195 173;     /* teal */
+    --pink: 236 72 153;
+
+    --shadow-soft:
+      10px 10px 24px rgba(163, 177, 198, 0.45),
+      -10px -10px 24px rgba(255, 255, 255, 0.95);
+    --shadow-soft-sm:
+      5px 5px 14px rgba(163, 177, 198, 0.40),
+      -5px -5px 14px rgba(255, 255, 255, 0.90);
+    --shadow-soft-inset:
+      inset 5px 5px 10px rgba(163, 177, 198, 0.50),
+      inset -5px -5px 10px rgba(255, 255, 255, 0.95);
+    --shadow-soft-pressed:
+      inset 3px 3px 6px rgba(163, 177, 198, 0.55),
+      inset -3px -3px 6px rgba(255, 255, 255, 0.85);
+
+    color-scheme: light;
+  }
+
+  .dark {
+    /* Dark soft-UI — deep page + lifted grey panels (как на главной) */
+    --bg: 22 26 35;            /* #161a23 — page (глубокий тёмный) */
+    --surface: 42 47 60;       /* #2a2f3c — панели (светло-серые) */
+    --ink: 232 236 246;
+    --muted: 150 158 178;
+    --accent: 130 158 255;
+    --accent2: 70 220 205;
+    --pink: 244 114 182;
+
+    --shadow-soft:
+      10px 10px 24px rgba(0, 0, 0, 0.55),
+      -10px -10px 24px rgba(82, 90, 110, 0.22);
+    --shadow-soft-sm:
+      5px 5px 14px rgba(0, 0, 0, 0.50),
+      -5px -5px 14px rgba(82, 90, 110, 0.20);
+    --shadow-soft-inset:
+      inset 5px 5px 10px rgba(0, 0, 0, 0.55),
+      inset -5px -5px 10px rgba(82, 90, 110, 0.20);
+    --shadow-soft-pressed:
+      inset 3px 3px 6px rgba(0, 0, 0, 0.60),
+      inset -3px -3px 6px rgba(82, 90, 110, 0.18);
+
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+  }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.25);
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+  }
+
+  /* Raised soft surface — cards, buttons, pills */
+  .soft {
+    @apply bg-surface shadow-soft rounded-3xl;
+  }
+  .soft-sm {
+    @apply bg-surface shadow-soft-sm rounded-2xl;
+  }
+  /* Inset (pressed in) — search, inputs, active state */
+  .soft-inset {
+    @apply bg-surface shadow-soft-inset rounded-full;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold
+      bg-surface text-ink shadow-soft-sm transition
+      hover:text-accent
+      active:shadow-soft-pressed active:translate-y-[1px]
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn text-white bg-accent hover:text-white hover:brightness-110;
+    box-shadow:
+      6px 6px 14px rgba(79, 111, 237, 0.35),
+      -4px -4px 10px rgba(255, 255, 255, 0.6);
+  }
+  .dark .btn-primary {
+    box-shadow:
+      6px 6px 14px rgba(10, 12, 18, 0.55),
+      -4px -4px 10px rgba(64, 70, 86, 0.30);
+  }
+
+  .tag {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold text-muted bg-surface shadow-soft-sm;
+  }
+
+  .icon-chip {
+    @apply h-12 w-12 grid place-items-center rounded-2xl bg-surface shadow-soft-sm text-accent;
+  }
+
+  /* Search bar (inset pill) */
+  .search {
+    @apply flex items-center gap-3 w-full rounded-full px-5 py-3 bg-surface shadow-soft-inset
+      text-ink placeholder:text-muted outline-none;
+  }
+
+  /* Toggle (like on ref image) */
+  .toggle {
+    @apply relative inline-flex h-8 w-14 rounded-full shadow-soft-inset bg-surface cursor-pointer transition;
+  }
+  .toggle-dot {
+    @apply absolute top-1 left-1 h-6 w-6 rounded-full bg-surface shadow-soft-sm transition-all;
+  }
+  .toggle[data-on="true"] .toggle-dot {
+    @apply left-7 bg-accent;
+  }
+}
