@@ -11,9 +11,15 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 export function Viewer({
   mesh,
   theme,
+  fitKey,
 }: {
   mesh: THREE.Group | null;
   theme: "light" | "dark";
+  // Меняется при смене режима (gridfinity/regular). Камера подгоняется
+  // под модель только когда изменился `fitKey`. Обычные изменения
+  // параметров не двигают камеру — иначе бокс "прыгает" когда юзер
+  // тыкает переключатели.
+  fitKey: string;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -21,6 +27,7 @@ export function Viewer({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const modelRef = useRef<THREE.Object3D | null>(null);
+  const lastFitKeyRef = useRef<string | null>(null);
 
   // Инициализация сцены — один раз при mount
   useEffect(() => {
@@ -156,24 +163,30 @@ export function Viewer({
     scene.add(mesh);
     modelRef.current = mesh;
 
-    // Fit to view — вычисляем bbox, подгоняем камеру
-    const box = new THREE.Box3().setFromObject(mesh);
-    if (!box.isEmpty()) {
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const fov = (camera.fov * Math.PI) / 180;
-      const dist = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
-      camera.position.set(
-        center.x + dist * 0.75,
-        center.y + dist * 0.65,
-        center.z + dist * 0.95,
-      );
-      controls.target.copy(center);
-      camera.lookAt(center);
-      controls.update();
+    // Fit to view — подгоняем камеру только при ПЕРВОЙ модели или при
+    // смене fitKey (режим коробки). При изменении параметров (lip,
+    // размер, магниты) камера остаётся там, где её поставил юзер.
+    const shouldFit = lastFitKeyRef.current !== fitKey;
+    if (shouldFit) {
+      lastFitKeyRef.current = fitKey;
+      const box = new THREE.Box3().setFromObject(mesh);
+      if (!box.isEmpty()) {
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = (camera.fov * Math.PI) / 180;
+        const dist = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
+        camera.position.set(
+          center.x + dist * 0.75,
+          center.y + dist * 0.65,
+          center.z + dist * 0.95,
+        );
+        controls.target.copy(center);
+        camera.lookAt(center);
+        controls.update();
+      }
     }
-  }, [mesh, theme]);
+  }, [mesh, theme, fitKey]);
 
   return (
     <div

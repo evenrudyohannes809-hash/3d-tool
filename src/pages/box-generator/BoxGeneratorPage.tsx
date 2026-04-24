@@ -141,7 +141,7 @@ export default function BoxGeneratorPage() {
 
         {/* 3D-вьюер */}
         <div className="soft p-2 sm:p-3 min-h-[420px] lg:min-h-[560px] relative">
-          <Viewer mesh={mesh} theme={theme} />
+          <Viewer mesh={mesh} theme={theme} fitKey={mode} />
           {building ? (
             <div className="absolute right-4 top-4 tag text-xs">Считаю…</div>
           ) : null}
