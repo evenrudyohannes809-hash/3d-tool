@@ -13,6 +13,7 @@ import {
   type GridfinityBinParams,
   type LipStyle,
   type BaseHoles,
+  type BaseStyle,
 } from "./gridfinity";
 import {
   buildRegularBox,
@@ -281,6 +282,25 @@ function GridfinityControls({
       </div>
 
       <div>
+        <Label hint="Стандартная база — полноценная 3-уровневая юбка с магнитами и винтами (как в официальной спеке). Lite — плоская тонкая плита 1.8 мм: экономит пластик и время печати, но без магнитов/винтов и не встаёт в baseplate.">
+          База
+        </Label>
+        <div className="flex gap-2 flex-wrap">
+          {(["standard", "lite"] as BaseStyle[]).map((b) => (
+            <Pill
+              key={b}
+              active={value.baseStyle === b}
+              onClick={() => set("baseStyle", b)}
+            >
+              {b === "standard" ? "Стандартная" : "Lite (экономная)"}
+            </Pill>
+          ))}
+        </div>
+      </div>
+
+      {value.baseStyle === "standard" ? (
+      <>
+      <div>
         <Label hint="Пазы снизу под неодимовые магниты, которыми коробка притягивается к металлической baseplate. Смотри снизу модели (поверни мышью).">
           Пазы для магнитов
         </Label>
@@ -349,6 +369,113 @@ function GridfinityControls({
                   : "В каждой клетке"}
             </Pill>
           ))}
+        </div>
+      </div>
+      </>
+      ) : (
+        <div className="soft-inset rounded-2xl p-3 text-xs text-muted leading-relaxed">
+          Lite-база — плоская плита 1.8 мм. Магниты, винты и стыковка с
+          Gridfinity-baseplate недоступны (это плата за экономию пластика).
+          Стыковка соседних бинов между собой по-прежнему работает через lip.
+        </div>
+      )}
+
+      <div>
+        <div className="text-xs font-bold text-muted mb-2 uppercase tracking-wider">
+          Перегородки внутри коробки
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>По ширине</Label>
+            <NumberField
+              value={value.compartmentsX}
+              onChange={(v) =>
+                set(
+                  "compartmentsX",
+                  Math.max(1, Math.min(10, Math.round(Number(v) || 1))),
+                )
+              }
+              min={1}
+              max={10}
+              step={1}
+            />
+          </div>
+          <div>
+            <Label>По глубине</Label>
+            <NumberField
+              value={value.compartmentsY}
+              onChange={(v) =>
+                set(
+                  "compartmentsY",
+                  Math.max(1, Math.min(10, Math.round(Number(v) || 1))),
+                )
+              }
+              min={1}
+              max={10}
+              step={1}
+            />
+          </div>
+        </div>
+        <div className="text-xs text-muted mt-2">
+          Разделят полость на {value.compartmentsX}×{value.compartmentsY} отсеков
+          стенкой толщиной {value.outerWallThickness} мм. 1×1 — один большой
+          отсек без перегородок.
+        </div>
+      </div>
+
+      <div>
+        <Label hint="Вогнутый скос у задней стенки каждого отсека — помогает выкатить мелочь из бина пальцем. Радиус в мм (0 = без скоса).">
+          Scoop (наклон у задней стенки)
+        </Label>
+        <NumberField
+          value={value.scoopRadius}
+          onChange={(v) =>
+            set("scoopRadius", Math.max(0, Math.min(40, Number(v) || 0)))
+          }
+          suffix="мм"
+          min={0}
+          max={40}
+          step={0.5}
+        />
+      </div>
+
+      <div>
+        <Label hint="Горизонтальная полочка под стикер-этикетку у передней стенки каждого отсека. Ширина — в мм (вглубь отсека). 0 = без полки.">
+          Label — полка под ярлык
+        </Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Ширина</Label>
+            <NumberField
+              value={value.labelLedgeWidth}
+              onChange={(v) =>
+                set(
+                  "labelLedgeWidth",
+                  Math.max(0, Math.min(30, Number(v) || 0)),
+                )
+              }
+              suffix="мм"
+              min={0}
+              max={30}
+              step={0.5}
+            />
+          </div>
+          <div>
+            <Label>Толщина</Label>
+            <NumberField
+              value={value.labelLedgeHeight}
+              onChange={(v) =>
+                set(
+                  "labelLedgeHeight",
+                  Math.max(0.4, Math.min(5, Number(v) || 1.2)),
+                )
+              }
+              suffix="мм"
+              min={0.4}
+              max={5}
+              step={0.1}
+            />
+          </div>
         </div>
       </div>
     </>
