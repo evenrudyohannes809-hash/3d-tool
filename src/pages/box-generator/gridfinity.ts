@@ -35,9 +35,10 @@ const STACKING_LIP_H = 4.4;
 const STACKING_LIP_SUPPORT_H = 1.2; // "подушка" из стенки, чтобы lip не висел в воздухе
 const STACKING_LIP_DEPTH = 2.6; // суммарный inward-scos бортика (суживает отверстие к верху)
 
-// Магниты / винты
-const MAGNET_R = 6.5 / 2;
-const MAGNET_DEPTH = 2.4; // 2mm магнит + 2 слоя покрытия
+// Магниты / винты — значения по умолчанию (спека kennetek), параметры
+// диаметра и глубины магнита пользователь меняет через UI.
+const DEFAULT_MAGNET_DIAMETER = 6.5; // мм (стандартный D6 магнит)
+const DEFAULT_MAGNET_DEPTH = 2.4; // 2мм магнит + 2 слоя покрытия
 const SCREW_R = 3 / 2;
 const HOLE_FROM_SIDE = 8; // от бока клетки до центра отверстия
 
@@ -52,6 +53,8 @@ export type GridfinityBinParams = {
   outerWallThickness: number; // толщина стенки над бейзом
   lipStyle: LipStyle;
   magnets: BaseHoles;
+  magnetDiameter: number; // диаметр магнитного паза, мм
+  magnetDepth: number; // глубина магнитного паза, мм
   screwHoles: BaseHoles;
 };
 
@@ -63,6 +66,8 @@ export const DEFAULT_BIN: GridfinityBinParams = {
   outerWallThickness: 1.2,
   lipStyle: "default",
   magnets: "none",
+  magnetDiameter: DEFAULT_MAGNET_DIAMETER,
+  magnetDepth: DEFAULT_MAGNET_DEPTH,
   screwHoles: "none",
 };
 
@@ -87,8 +92,12 @@ export async function buildGridfinityBin(
     outerWallThickness: WALL,
     lipStyle,
     magnets,
+    magnetDiameter,
+    magnetDepth,
     screwHoles,
   } = p;
+  const MAGNET_R = Math.max(0.5, magnetDiameter / 2);
+  const MAGNET_DEPTH = Math.max(0.4, magnetDepth);
 
   const totalH = zUnits * HEIGHT_UNIT;
   const bodyH = totalH - BASE_HEIGHT;
@@ -225,13 +234,14 @@ export async function buildGridfinityBin(
           );
           const mag = track(
             (magCS as unknown as { extrude: (h: number) => unknown }).extrude(
-              MAGNET_DEPTH,
+              MAGNET_DEPTH + 0.02,
             ) as HasDelete,
           );
+          // Сдвигаем чуть ниже z=0, чтобы не было тонкой "плёнки" на подошве.
           const magPos = track(
             (mag as unknown as {
               translate: (v: [number, number, number]) => unknown;
-            }).translate([cx + sx * hx, cy + sy * hx, 0]) as HasDelete,
+            }).translate([cx + sx * hx, cy + sy * hx, -0.01]) as HasDelete,
           );
           cell = track(
             (cell as unknown as { subtract: (o: unknown) => unknown }).subtract(
@@ -249,13 +259,13 @@ export async function buildGridfinityBin(
           );
           const scr = track(
             (scrCS as unknown as { extrude: (h: number) => unknown }).extrude(
-              BASE_HEIGHT + 0.02,
+              BASE_HEIGHT + 0.04,
             ) as HasDelete,
           );
           const scrPos = track(
             (scr as unknown as {
               translate: (v: [number, number, number]) => unknown;
-            }).translate([cx + sx * hx, cy + sy * hx, 0]) as HasDelete,
+            }).translate([cx + sx * hx, cy + sy * hx, -0.02]) as HasDelete,
           );
           cell = track(
             (cell as unknown as { subtract: (o: unknown) => unknown }).subtract(

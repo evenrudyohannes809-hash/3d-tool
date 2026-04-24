@@ -165,10 +165,32 @@ function GridfinityControls({
     v: GridfinityBinParams[K],
   ) => onChange({ ...value, [k]: v });
 
+  // Ввод идёт в миллиметрах — так понятнее чем "U". Внутри храним
+  // целое количество юнитов (шаг 42мм для XY, 7мм для Z).
+  const g = value.gridSize ?? 42;
+  const widthMm = value.xUnits * g;
+  const depthMm = value.yUnits * g;
+  const heightMm = value.zUnits * 7;
+
+  const setWidthMm = (mm: number) => {
+    const u = Math.max(1, Math.min(20, Math.round(mm / g)));
+    set("xUnits", u);
+  };
+  const setDepthMm = (mm: number) => {
+    const u = Math.max(1, Math.min(20, Math.round(mm / g)));
+    set("yUnits", u);
+  };
+  const setHeightMm = (mm: number) => {
+    const u = Math.max(1, Math.min(30, Math.round(mm / 7)));
+    set("zUnits", u);
+  };
+
   return (
     <>
       <div>
-        <Label hint="Стандартно 42 мм">Размер клетки сетки</Label>
+        <Label hint="Стандарт Gridfinity — 42 мм. Меняй только если знаешь зачем.">
+          Размер клетки сетки
+        </Label>
         <NumberField
           value={value.gridSize ?? 42}
           onChange={(v) => set("gridSize", Math.max(20, Number(v) || 42))}
@@ -177,52 +199,54 @@ function GridfinityControls({
           max={100}
         />
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <Label>X</Label>
-          <NumberField
-            value={value.xUnits}
-            onChange={(v) =>
-              set("xUnits", Math.max(1, Math.min(10, Math.round(Number(v) || 1))))
-            }
-            suffix="u"
-            min={1}
-            max={10}
-            step={1}
-          />
+
+      <div>
+        <div className="text-xs font-bold text-muted mb-2 uppercase tracking-wider">
+          Размеры коробки
         </div>
-        <div>
-          <Label>Y</Label>
-          <NumberField
-            value={value.yUnits}
-            onChange={(v) =>
-              set("yUnits", Math.max(1, Math.min(10, Math.round(Number(v) || 1))))
-            }
-            suffix="u"
-            min={1}
-            max={10}
-            step={1}
-          />
+        <div className="grid grid-cols-3 gap-3 items-end">
+          <div>
+            <Label>Ширина</Label>
+            <NumberField
+              value={widthMm}
+              onChange={(v) => setWidthMm(Number(v) || g)}
+              suffix="мм"
+              min={g}
+              max={g * 20}
+              step={g}
+            />
+          </div>
+          <div>
+            <Label>Глубина</Label>
+            <NumberField
+              value={depthMm}
+              onChange={(v) => setDepthMm(Number(v) || g)}
+              suffix="мм"
+              min={g}
+              max={g * 20}
+              step={g}
+            />
+          </div>
+          <div>
+            <Label>Высота</Label>
+            <NumberField
+              value={heightMm}
+              onChange={(v) => setHeightMm(Number(v) || 7)}
+              suffix="мм"
+              min={7}
+              max={7 * 30}
+              step={7}
+            />
+          </div>
         </div>
-        <div>
-          <Label hint="1u = 7мм">Z</Label>
-          <NumberField
-            value={value.zUnits}
-            onChange={(v) =>
-              set("zUnits", Math.max(1, Math.min(20, Math.round(Number(v) || 1))))
-            }
-            suffix="u"
-            min={1}
-            max={20}
-            step={1}
-          />
+        <div className="text-xs text-muted mt-2">
+          Шаг по ширине и глубине — 42 мм (одна клетка Gridfinity), по высоте —
+          7 мм. Итого в юнитах: {value.xUnits}×{value.yUnits}×{value.zUnits}.
         </div>
       </div>
 
       <div>
-        <Label hint="Дно у Gridfinity-bin — это сама юбка (сплошная), отдельной толщины не надо">
-          Внешняя стенка
-        </Label>
+        <Label>Внешняя стенка</Label>
         <NumberField
           value={value.outerWallThickness}
           onChange={(v) =>
@@ -236,8 +260,8 @@ function GridfinityControls({
       </div>
 
       <div>
-        <Label hint="Нужен чтобы коробки стыковались друг на друга">
-          Верхний бортик (lip)
+        <Label hint="Это НЕ крышка. Это стыковочный бортик сверху, чтобы коробки защёлкивались друг на друга — фирменная фича стандарта Gridfinity. Без lip коробки не стакаются.">
+          Стыковочный бортик (stacking lip)
         </Label>
         <div className="flex gap-2 flex-wrap">
           {(["default", "thin", "none"] as LipStyle[]).map((l) => (
@@ -247,32 +271,68 @@ function GridfinityControls({
               onClick={() => set("lipStyle", l)}
             >
               {l === "default"
-                ? "Default"
+                ? "Стандартный"
                 : l === "thin"
-                  ? "Thin"
-                  : "Без lip"}
+                  ? "Тонкий"
+                  : "Без бортика"}
             </Pill>
           ))}
         </div>
       </div>
 
       <div>
-        <Label>Пазы для магнитов</Label>
-        <div className="flex gap-2 flex-wrap">
+        <Label hint="Пазы снизу под неодимовые магниты, которыми коробка притягивается к металлической baseplate. Смотри снизу модели (поверни мышью).">
+          Пазы для магнитов
+        </Label>
+        <div className="flex gap-2 flex-wrap mb-2">
           {(["none", "corner", "full"] as BaseHoles[]).map((l) => (
             <Pill
               key={l}
               active={value.magnets === l}
               onClick={() => set("magnets", l)}
             >
-              {l === "none" ? "Нет" : l === "corner" ? "Только углы" : "Каждая клетка"}
+              {l === "none"
+                ? "Нет"
+                : l === "corner"
+                  ? "Только углы коробки"
+                  : "В каждой клетке"}
             </Pill>
           ))}
         </div>
+        {value.magnets !== "none" ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Диаметр</Label>
+              <NumberField
+                value={value.magnetDiameter}
+                onChange={(v) =>
+                  set("magnetDiameter", Math.max(2, Math.min(12, Number(v) || 6.5)))
+                }
+                suffix="мм"
+                min={2}
+                max={12}
+                step={0.1}
+              />
+            </div>
+            <div>
+              <Label>Глубина</Label>
+              <NumberField
+                value={value.magnetDepth}
+                onChange={(v) =>
+                  set("magnetDepth", Math.max(0.5, Math.min(6, Number(v) || 2.4)))
+                }
+                suffix="мм"
+                min={0.5}
+                max={6}
+                step={0.1}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div>
-        <Label hint="Сквозные отверстия — коробку можно прикрутить к полке">
+        <Label hint="Сквозные 3мм отверстия — коробку можно прикрутить к полке / столу.">
           Отверстия под винты
         </Label>
         <div className="flex gap-2 flex-wrap">
@@ -282,7 +342,11 @@ function GridfinityControls({
               active={value.screwHoles === l}
               onClick={() => set("screwHoles", l)}
             >
-              {l === "none" ? "Нет" : l === "corner" ? "Только углы" : "Каждая клетка"}
+              {l === "none"
+                ? "Нет"
+                : l === "corner"
+                  ? "Только углы коробки"
+                  : "В каждой клетке"}
             </Pill>
           ))}
         </div>
