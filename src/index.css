@@ -133,4 +133,20 @@
   .toggle[data-on="true"] .toggle-dot {
     @apply left-7 bg-accent;
   }
+
+  /* Небольшой soft lift для бейджей слайсеров и подобных маркеров */
+  .chip {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold bg-surface shadow-soft-sm;
+  }
+}
+
+@keyframes softSlideUp {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }

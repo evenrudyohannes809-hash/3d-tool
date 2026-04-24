@@ -5,7 +5,7 @@ import "./index.css";
 import { ThemeProvider } from "./lib/theme";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
-import CalculatorPage from "./pages/CalculatorPage";
+import CalculatorPage from "./pages/calculator/CalculatorPage";
 import ToolPlaceholder from "./pages/ToolPlaceholder";
 import NotFound from "./pages/NotFound";
 
