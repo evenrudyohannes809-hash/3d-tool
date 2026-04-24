@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
+import { usePageMeta } from "../lib/usePageMeta";
+import { NOT_FOUND_META } from "../lib/routes";
 
 export default function NotFound() {
+  usePageMeta(NOT_FOUND_META);
   return (
     <section className="container-app py-20">
       <div className="soft p-10 sm:p-16 text-center max-w-xl mx-auto">

@@ -1,84 +1,21 @@
 import { Link, useParams } from "react-router-dom";
+import { usePageMeta } from "../lib/usePageMeta";
+import { TOOLS, NOT_FOUND_META } from "../lib/routes";
+import type { RouteMeta, ToolRoute } from "../lib/routes";
 
-const TOOL_META: Record<
-  string,
-  { title: string; description: string; status: string }
-> = {
-  "box-generator": {
-    title: "Генератор коробок",
-    description:
-      "Параметрический STL с размерами, ячейками, скруглением, крышкой. Скачиваешь готовый файл для печати.",
-    status: "В разработке",
-  },
-  "stl-viewer": {
-    title: "STL Viewer + Info",
-    description:
-      "Загружаешь STL, видишь 3D-модель, объём, вес под выбранный пластик, габариты, центр масс и количество треугольников.",
-    status: "Скоро",
-  },
-  "stl-repair": {
-    title: "STL Repair",
-    description:
-      "Автоматически закрываем дыры в меше, переворачиваем нормали наружу, удаляем плавающий мусор. Скачиваешь починенный файл.",
-    status: "Скоро",
-  },
-  "gcode-viewer": {
-    title: "G-code Viewer",
-    description:
-      "Покадровый просмотр слоёв, график скоростей, суммарное время печати и расход филамента. Без установленного слайсера.",
-    status: "Скоро",
-  },
-  "tower-generator": {
-    title: "Tower генератор",
-    description:
-      "Temp tower, retract tower, flow tower под твой принтер, сопло, материал. Готовый .gcode одним кликом.",
-    status: "Скоро",
-  },
-  lithophane: {
-    title: "Литофан",
-    description:
-      "Загрузил фото, настроил толщину и контраст — получил STL-пластинку. Светишь сзади — светящееся изображение.",
-    status: "Скоро",
-  },
-  filaments: {
-    title: "База филаментов",
-    description:
-      "Температуры экструдера/стола, усадка, плотность, типовые скорости и цены по брендам: PLA, PETG, ABS, TPU, ASA, PC.",
-    status: "Скоро",
-  },
-  problems: {
-    title: "Матрица проблем печати",
-    description:
-      "Интерактивный разбор: стрингинг, сдвиг слоёв, отклейка, недоэкструзия, плохая адгезия. Нажал симптом — получил чек-лист.",
-    status: "Скоро",
-  },
-  "spool-tracker": {
-    title: "Учёт катушек",
-    description:
-      "Добавил катушку — каждый заказ списывает граммы. Остаток, себестоимость, прогноз когда кончится.",
-    status: "Скоро",
-  },
-  blog: {
-    title: "Блог",
-    description:
-      "Статьи по настройке принтеров, обзоры филаментов, разборы проектов.",
-    status: "Скоро",
-  },
-  favorites: {
-    title: "Избранное",
-    description: "Сохраняй утилиты, чтобы быстро возвращаться.",
-    status: "Скоро",
-  },
-  filaments2: { title: "", description: "", status: "" },
-};
-
+// Статусы заглушек берём из центрального реестра TOOLS (routes.ts).
+// Сам калькулятор здесь не рендерится — у него свой роут.
 export default function ToolPlaceholder() {
   const { slug = "" } = useParams();
-  const meta = TOOL_META[slug] ?? {
-    title: "Утилита",
-    description: "Страница в разработке.",
-    status: "Скоро",
-  };
+  const tool: ToolRoute | undefined = TOOLS.find((t) => t.slug === slug);
+  const meta: RouteMeta = tool ?? NOT_FOUND_META;
+  usePageMeta(meta);
+
+  const title = tool ? tool.cardTitle : "Утилита";
+  const description = tool
+    ? tool.cardDescription
+    : "Такой утилиты нет — посмотри список на главной.";
+  const status = tool ? tool.tag : "Скоро";
 
   return (
     <section className="container-app py-10 sm:py-14">
@@ -110,11 +47,11 @@ export default function ToolPlaceholder() {
           <div className="flex-1">
             <div className="flex items-center gap-3 flex-wrap mb-2">
               <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                {meta.title}
+                {title}
               </h1>
-              <span className="tag">{meta.status}</span>
+              <span className="tag">{status}</span>
             </div>
-            <p className="text-muted leading-relaxed">{meta.description}</p>
+            <p className="text-muted leading-relaxed">{description}</p>
           </div>
         </div>
 
