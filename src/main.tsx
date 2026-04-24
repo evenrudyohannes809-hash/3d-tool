@@ -6,6 +6,7 @@ import { ThemeProvider } from "./lib/theme";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import CalculatorPage from "./pages/calculator/CalculatorPage";
+import BoxGeneratorPage from "./pages/box-generator/BoxGeneratorPage";
 import ToolPlaceholder from "./pages/ToolPlaceholder";
 import NotFound from "./pages/NotFound";
 
@@ -17,6 +18,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
             <Route path="tool/calculator" element={<CalculatorPage />} />
+            <Route path="tool/box-generator" element={<BoxGeneratorPage />} />
             <Route path="tool/:slug" element={<ToolPlaceholder />} />
             <Route path="*" element={<NotFound />} />
           </Route>
