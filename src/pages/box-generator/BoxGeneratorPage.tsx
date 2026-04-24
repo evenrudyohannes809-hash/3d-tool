@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import * as THREE from "three";
 import { usePageMeta } from "../../lib/usePageMeta";
@@ -32,29 +32,36 @@ export default function BoxGeneratorPage() {
   const [grid, setGrid] = useState<GridfinityBinParams>(DEFAULT_BIN);
   const [box, setBox] = useState<RegularBoxParams>(DEFAULT_BOX);
 
-  // Мемоизированная сборка меша — пересобирается только при изменении
-  // соответствующих параметров. Это не супер-быстро (ExtrudeGeometry
-  // несколько десятков мс), но приемлемо для настройки в реальном времени.
-  const mesh = useMemo<THREE.Group | null>(() => {
-    try {
-      return mode === "gridfinity"
-        ? buildGridfinityBin(grid)
-        : buildRegularBox(box);
-    } catch (e) {
-      console.error("Build error:", e);
-      return null;
-    }
+  // Геометрию Gridfinity строит WASM-модуль manifold-3d асинхронно, поэтому
+  // держим её в state и обновляем через useEffect с cancellation.
+  const [mesh, setMesh] = useState<THREE.Group | null>(null);
+  const [building, setBuilding] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBuilding(true);
+    const build = async () => {
+      try {
+        const g =
+          mode === "gridfinity"
+            ? await buildGridfinityBin(grid)
+            : buildRegularBox(box);
+        if (!cancelled) setMesh(g);
+      } catch (e) {
+        console.error("Build error:", e);
+        if (!cancelled) setMesh(null);
+      } finally {
+        if (!cancelled) setBuilding(false);
+      }
+    };
+    build();
+    return () => {
+      cancelled = true;
+    };
   }, [mode, grid, box]);
 
   const dims =
     mode === "gridfinity" ? binOuterDimensions(grid) : regularBoxDimensions(box);
-
-  // Дебаунс-ничего: пересчёт идёт на каждом тике useState, это ок для
-  // коробок такого размера. Если станет тормозить — накинем throttle.
-
-  useEffect(() => {
-    // Подпиливаем viewer mesh, если меняется тема (перекрашиваем материал)
-  }, [theme]);
 
   const onExport = () => {
     if (!mesh) return;
@@ -125,16 +132,19 @@ export default function BoxGeneratorPage() {
           <button
             type="button"
             onClick={onExport}
-            disabled={!mesh}
+            disabled={!mesh || building}
             className="btn-primary w-full"
           >
-            Скачать STL
+            {building && !mesh ? "Подготовка..." : "Скачать STL"}
           </button>
         </div>
 
         {/* 3D-вьюер */}
-        <div className="soft p-2 sm:p-3 min-h-[420px] lg:min-h-[560px]">
+        <div className="soft p-2 sm:p-3 min-h-[420px] lg:min-h-[560px] relative">
           <Viewer mesh={mesh} theme={theme} />
+          {building ? (
+            <div className="absolute right-4 top-4 tag text-xs">Считаю…</div>
+          ) : null}
         </div>
       </div>
     </section>
