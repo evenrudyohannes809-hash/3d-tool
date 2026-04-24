@@ -1,4 +1,8 @@
 import * as THREE from "three";
+import type {
+  Manifold,
+  CrossSection,
+} from "manifold-3d";
 import { getManifold } from "./manifold";
 
 // ─── Gridfinity спецификация ─────────────────────────────────────────
@@ -8,7 +12,7 @@ import { getManifold } from "./manifold";
 
 export const GRID = 42; // шаг клетки сетки
 
-// База (юбка) одной клетки. Её "профиль" в сечении: нижний скос -> средняя часть -> верхний скос.
+// База (юбка) одной клетки. Её "профиль" в сечении: нижний скос → средняя часть → верхний скос.
 const CELL_BASE_TOP = 41.5; // верхний квадрат базы (клетки сцепляются с зазором 0.5мм)
 const CELL_BASE_MID = 37.2; // квадрат средней (вертикальной) части
 const CELL_BASE_BOT = 35.6; // самый нижний квадрат базы (узкая "лапа")
@@ -27,6 +31,9 @@ const BASE_BRIDGE_H = BASE_HEIGHT - BASE_PROFILE_H; // 2.25
 // Шаг высоты коробки (total bin height = zUnits * HEIGHT_UNIT + [lip])
 export const HEIGHT_UNIT = 7;
 
+// Lite-база — экономичная, без магнитов и профиля. Просто плоская плита.
+const LITE_BASE_HEIGHT = 1.8;
+
 // Внутренняя геометрия полости
 const INNER_FILLET_R = 2.8; // скругление углов полости
 
@@ -43,6 +50,7 @@ const HOLE_FROM_SIDE = 8; // от бока клетки до центра отв
 
 export type LipStyle = "default" | "thin" | "none";
 export type BaseHoles = "none" | "corner" | "full";
+export type BaseStyle = "standard" | "lite";
 
 export type GridfinityBinParams = {
   xUnits: number;
@@ -51,10 +59,22 @@ export type GridfinityBinParams = {
   gridSize?: number; // по умолчанию 42, можно менять для кастом-сеток
   outerWallThickness: number; // толщина стенки над бейзом
   lipStyle: LipStyle;
+
+  // База
+  baseStyle: BaseStyle; // "lite" = тонкая плита без магнитов и профиля
   magnets: BaseHoles;
-  magnetDiameter: number; // диаметр магнитного паза, мм
-  magnetDepth: number; // глубина магнитного паза, мм
+  magnetDiameter: number;
+  magnetDepth: number;
   screwHoles: BaseHoles;
+
+  // Перегородки (compartments)
+  compartmentsX: number; // 1..10, число отсеков по X
+  compartmentsY: number; // 1..10, число отсеков по Y
+
+  // Фичи отсеков
+  scoopRadius: number; // 0 = без скупа; радиус квадрата-скоса у задней стенки
+  labelLedgeWidth: number; // 0 = без полки; ширина полки под ярлык спереди
+  labelLedgeHeight: number; // толщина полки
 };
 
 export const DEFAULT_BIN: GridfinityBinParams = {
@@ -64,24 +84,26 @@ export const DEFAULT_BIN: GridfinityBinParams = {
   gridSize: GRID,
   outerWallThickness: 1.2,
   lipStyle: "default",
+  baseStyle: "standard",
   magnets: "none",
   magnetDiameter: DEFAULT_MAGNET_DIAMETER,
   magnetDepth: DEFAULT_MAGNET_DEPTH,
   screwHoles: "none",
+  compartmentsX: 1,
+  compartmentsY: 1,
+  scoopRadius: 0,
+  labelLedgeWidth: 0,
+  labelLedgeHeight: 1.2,
 };
 
 // ─── Асинхронная сборка геометрии через manifold-3d ──────────────────
-//
-// Коробка собирается как единое булево-тело:
-//   (базы клеток) ∪ (мост) ∪ (стенки − полость) ∪ (lip − внутренний конус)
-//   − (отверстия под магниты / винты)
-// Получается водонепроницаемое тело без "двух дон" и висящих слоёв.
 
 export async function buildGridfinityBin(
   p: GridfinityBinParams,
 ): Promise<THREE.Group> {
   const wasm = await getManifold();
-  const { CrossSection } = wasm;
+  const MF = wasm.Manifold;
+  const CS = wasm.CrossSection;
 
   const {
     xUnits,
@@ -90,332 +112,296 @@ export async function buildGridfinityBin(
     gridSize = GRID,
     outerWallThickness: WALL,
     lipStyle,
+    baseStyle,
     magnets,
     magnetDiameter,
     magnetDepth,
     screwHoles,
+    compartmentsX,
+    compartmentsY,
+    scoopRadius,
+    labelLedgeWidth,
+    labelLedgeHeight,
   } = p;
+
   const MAGNET_R = Math.max(0.5, magnetDiameter / 2);
   const MAGNET_DEPTH = Math.max(0.4, magnetDepth);
+  const nX = Math.max(1, Math.floor(compartmentsX));
+  const nY = Math.max(1, Math.floor(compartmentsY));
 
+  const baseH = baseStyle === "lite" ? LITE_BASE_HEIGHT : BASE_HEIGHT;
   const totalH = zUnits * HEIGHT_UNIT;
-  const bodyH = totalH - BASE_HEIGHT;
-  if (bodyH < 0) {
+  const bodyH = totalH - baseH;
+  if (bodyH < 0.5) {
     throw new Error("zUnits слишком маленький (минимум 1).");
   }
 
   const outerW = xUnits * gridSize - 0.5;
   const outerD = yUnits * gridSize - 0.5;
 
-  // Всё, что построим через WASM — надо потом явно освободить.
-  type HasDelete = { delete: () => void };
-  const bag: HasDelete[] = [];
-  const track = <T extends HasDelete>(x: T): T => {
+  // ── Трекинг WASM-объектов для освобождения ──
+  const bag: Array<{ delete: () => void }> = [];
+  const T = <X extends { delete: () => void }>(x: X): X => {
     bag.push(x);
     return x;
   };
 
-  // Rounded-rect CrossSection (центрированный).
-  const rrect = (w: number, h: number, r: number) => {
+  // Rounded-rect 2D (центрированный).
+  const rrect = (w: number, h: number, r: number): CrossSection => {
     const coreW = Math.max(0.01, w - 2 * r);
     const coreH = Math.max(0.01, h - 2 * r);
-    const core = track(
-      (CrossSection as unknown as {
-        square: (size: [number, number], center: boolean) => unknown;
-      }).square([coreW, coreH], true) as HasDelete,
-    );
-    // offset(r, "Round") — расширяет по периметру на r с округлением углов.
-    const rounded = (core as unknown as {
-      offset: (delta: number, joinType: string) => unknown;
-    }).offset(r, "Round") as HasDelete;
-    return track(rounded);
+    const core = T(CS.square([coreW, coreH], true));
+    return T(core.offset(r, "Round"));
   };
 
-  // ── База одной клетки (в начале координат) ──
-  const buildBaseCell = (): unknown => {
-    // Нижний скос: 35.6×35.6 → 37.2×37.2 за 0.8мм.
-    const bot = rrect(CELL_BASE_BOT, CELL_BASE_BOT, BASE_BOT_R) as unknown as {
-      extrude: (
-        h: number,
-        nDiv: number,
-        twist: number,
-        scaleTop: [number, number],
-      ) => unknown;
-    };
-    const bot3d = track(
+  // ── База одной клетки ──
+  const buildBaseCell = (): Manifold => {
+    const bot = T(rrect(CELL_BASE_BOT, CELL_BASE_BOT, BASE_BOT_R));
+    const bot3d = T(
       bot.extrude(BOT_CHAMFER_H, 0, 0, [
         CELL_BASE_MID / CELL_BASE_BOT,
         CELL_BASE_MID / CELL_BASE_BOT,
-      ]) as HasDelete,
+      ]),
     );
 
-    // Средняя часть: 37.2×37.2 вертикально 1.8мм, подняться на 0.8.
-    const mid = rrect(CELL_BASE_MID, CELL_BASE_MID, BASE_MID_R) as unknown as {
-      extrude: (h: number) => unknown;
-    };
-    const mid3dRaw = track(mid.extrude(MID_H) as HasDelete);
-    const mid3d = track(
-      (mid3dRaw as unknown as {
-        translate: (v: [number, number, number]) => unknown;
-      }).translate([0, 0, BOT_CHAMFER_H]) as HasDelete,
+    const mid = T(rrect(CELL_BASE_MID, CELL_BASE_MID, BASE_MID_R));
+    const mid3d = T(mid.extrude(MID_H).translate([0, 0, BOT_CHAMFER_H]));
+
+    const topCS = T(rrect(CELL_BASE_MID, CELL_BASE_MID, BASE_MID_R));
+    const top3d = T(
+      topCS
+        .extrude(TOP_CHAMFER_H, 0, 0, [
+          CELL_BASE_TOP / CELL_BASE_MID,
+          CELL_BASE_TOP / CELL_BASE_MID,
+        ])
+        .translate([0, 0, BOT_CHAMFER_H + MID_H]),
     );
 
-    // Верхний скос: 37.2×37.2 → 41.5×41.5 за 2.15мм, подняться на 2.6.
-    const top = rrect(CELL_BASE_MID, CELL_BASE_MID, BASE_MID_R) as unknown as {
-      extrude: (
-        h: number,
-        nDiv: number,
-        twist: number,
-        scaleTop: [number, number],
-      ) => unknown;
-    };
-    const top3dRaw = track(
-      top.extrude(TOP_CHAMFER_H, 0, 0, [
-        CELL_BASE_TOP / CELL_BASE_MID,
-        CELL_BASE_TOP / CELL_BASE_MID,
-      ]) as HasDelete,
-    );
-    const top3d = track(
-      (top3dRaw as unknown as {
-        translate: (v: [number, number, number]) => unknown;
-      }).translate([0, 0, BOT_CHAMFER_H + MID_H]) as HasDelete,
-    );
-
-    const u1 = track(
-      (bot3d as unknown as { add: (o: unknown) => unknown }).add(
-        mid3d,
-      ) as HasDelete,
-    );
-    const u2 = track(
-      (u1 as unknown as { add: (o: unknown) => unknown }).add(
-        top3d,
-      ) as HasDelete,
-    );
-    return u2;
+    return T(T(bot3d.add(mid3d)).add(top3d));
   };
 
-  // ── Все клетки (база + опц. магниты/винты) в позициях сетки ──
-  let bases: unknown = null;
-  for (let j = 0; j < yUnits; j++) {
-    for (let i = 0; i < xUnits; i++) {
-      const cx = (i - (xUnits - 1) / 2) * gridSize;
-      const cy = (j - (yUnits - 1) / 2) * gridSize;
+  // ── Основа: либо профилированная (standard), либо плоская (lite) ──
+  let baseSolid: Manifold;
+  if (baseStyle === "standard") {
+    // Все клетки с профилем + отверстия магниты/винты.
+    let bases: Manifold | null = null;
+    for (let j = 0; j < yUnits; j++) {
+      for (let i = 0; i < xUnits; i++) {
+        const cx = (i - (xUnits - 1) / 2) * gridSize;
+        const cy = (j - (yUnits - 1) / 2) * gridSize;
 
-      let cell = buildBaseCell();
-      cell = track(
-        (cell as unknown as {
-          translate: (v: [number, number, number]) => unknown;
-        }).translate([cx, cy, 0]) as HasDelete,
-      );
+        let cell = T(buildBaseCell().translate([cx, cy, 0]));
 
-      // Отверстия в ЭТОЙ клетке (если нужно).
-      const isCornerCell =
-        (i === 0 || i === xUnits - 1) && (j === 0 || j === yUnits - 1);
-      const addMagnets =
-        magnets === "full" || (magnets === "corner" && isCornerCell);
-      const addScrews =
-        screwHoles === "full" || (screwHoles === "corner" && isCornerCell);
+        const isCorner =
+          (i === 0 || i === xUnits - 1) && (j === 0 || j === yUnits - 1);
+        const addMag =
+          magnets === "full" || (magnets === "corner" && isCorner);
+        const addScr =
+          screwHoles === "full" || (screwHoles === "corner" && isCorner);
 
-      const hx = CELL_BASE_TOP / 2 - HOLE_FROM_SIDE;
-      const cornerOffsets: [number, number][] = [
-        [1, 1],
-        [-1, 1],
-        [1, -1],
-        [-1, -1],
-      ];
+        const hx = CELL_BASE_TOP / 2 - HOLE_FROM_SIDE;
+        const corners: [number, number][] = [
+          [1, 1],
+          [-1, 1],
+          [1, -1],
+          [-1, -1],
+        ];
 
-      if (addMagnets) {
-        for (const [sx, sy] of cornerOffsets) {
-          const magCS = track(
-            (CrossSection as unknown as {
-              circle: (r: number, n: number) => unknown;
-            }).circle(MAGNET_R, 32) as HasDelete,
-          );
-          const mag = track(
-            (magCS as unknown as { extrude: (h: number) => unknown }).extrude(
-              MAGNET_DEPTH + 0.02,
-            ) as HasDelete,
-          );
-          // Сдвигаем чуть ниже z=0, чтобы не было тонкой "плёнки" на подошве.
-          const magPos = track(
-            (mag as unknown as {
-              translate: (v: [number, number, number]) => unknown;
-            }).translate([cx + sx * hx, cy + sy * hx, -0.01]) as HasDelete,
-          );
-          cell = track(
-            (cell as unknown as { subtract: (o: unknown) => unknown }).subtract(
-              magPos,
-            ) as HasDelete,
-          );
+        if (addMag) {
+          for (const [sx, sy] of corners) {
+            const mag = T(
+              T(CS.circle(MAGNET_R, 32))
+                .extrude(MAGNET_DEPTH + 0.02)
+                .translate([cx + sx * hx, cy + sy * hx, -0.01]),
+            );
+            cell = T(cell.subtract(mag));
+          }
         }
-      }
-      if (addScrews) {
-        for (const [sx, sy] of cornerOffsets) {
-          const scrCS = track(
-            (CrossSection as unknown as {
-              circle: (r: number, n: number) => unknown;
-            }).circle(SCREW_R, 24) as HasDelete,
-          );
-          const scr = track(
-            (scrCS as unknown as { extrude: (h: number) => unknown }).extrude(
-              BASE_HEIGHT + 0.04,
-            ) as HasDelete,
-          );
-          const scrPos = track(
-            (scr as unknown as {
-              translate: (v: [number, number, number]) => unknown;
-            }).translate([cx + sx * hx, cy + sy * hx, -0.02]) as HasDelete,
-          );
-          cell = track(
-            (cell as unknown as { subtract: (o: unknown) => unknown }).subtract(
-              scrPos,
-            ) as HasDelete,
-          );
+        if (addScr) {
+          for (const [sx, sy] of corners) {
+            const scr = T(
+              T(CS.circle(SCREW_R, 24))
+                .extrude(BASE_HEIGHT + 0.04)
+                .translate([cx + sx * hx, cy + sy * hx, -0.02]),
+            );
+            cell = T(cell.subtract(scr));
+          }
         }
-      }
 
-      bases = bases
-        ? track(
-            (bases as unknown as { add: (o: unknown) => unknown }).add(
-              cell,
-            ) as HasDelete,
-          )
-        : cell;
+        bases = bases ? T(bases.add(cell)) : cell;
+      }
+    }
+
+    // Мост поверх профиля: z=4.75..7.
+    const bridge = T(
+      T(rrect(outerW, outerD, BASE_TOP_R))
+        .extrude(BASE_BRIDGE_H)
+        .translate([0, 0, BASE_PROFILE_H]),
+    );
+    baseSolid = T((bases ?? bridge).add(bridge));
+  } else {
+    // Lite: плоская плита, без магнитов/винтов и без профильной юбки.
+    // Внешние скругления — те же, что у верхней грани стандартной базы.
+    baseSolid = T(
+      T(rrect(outerW, outerD, BASE_TOP_R)).extrude(baseH),
+    );
+  }
+
+  // ── Стенки: z=baseH..totalH, минус полость ──
+  const wallOuter = T(
+    T(rrect(outerW, outerD, BASE_TOP_R))
+      .extrude(bodyH)
+      .translate([0, 0, baseH]),
+  );
+
+  // ── Полости отсеков ──
+  // Внутренняя зона после внешних стенок: cavityInnerW × cavityInnerD.
+  // Разбиваем на nX × nY ячеек через перегородки толщиной WALL.
+  const cavityInnerW = Math.max(1, outerW - 2 * WALL);
+  const cavityInnerD = Math.max(1, outerD - 2 * WALL);
+  const compW = Math.max(
+    4,
+    (cavityInnerW - (nX - 1) * WALL) / nX,
+  );
+  const compD = Math.max(
+    4,
+    (cavityInnerD - (nY - 1) * WALL) / nY,
+  );
+
+  // Позиции центров отсеков
+  const compCenter = (idx: number, n: number, size: number): number => {
+    const totalSpan = n * size + (n - 1) * WALL;
+    const start = -totalSpan / 2 + size / 2;
+    return start + idx * (size + WALL);
+  };
+
+  // Собираем все cavity'ы как ОДИН CrossSection (Union), потом extrude.
+  // Так получаем единую полость-минус-перегородки.
+  let cavityCS: CrossSection | null = null;
+  for (let j = 0; j < nY; j++) {
+    for (let i = 0; i < nX; i++) {
+      const cx = compCenter(i, nX, compW);
+      const cy = compCenter(j, nY, compD);
+      const cc = T(rrect(compW, compD, INNER_FILLET_R).translate([cx, cy]));
+      cavityCS = cavityCS ? T(cavityCS.add(cc)) : cc;
     }
   }
 
-  // ── Мост поверх профиля: z=4.75..7 в полном габарите ──
-  const bridgeCS = rrect(outerW, outerD, BASE_TOP_R);
-  const bridgeRaw = track(
-    (bridgeCS as unknown as { extrude: (h: number) => unknown }).extrude(
-      BASE_BRIDGE_H,
-    ) as HasDelete,
-  );
-  const bridge = track(
-    (bridgeRaw as unknown as {
-      translate: (v: [number, number, number]) => unknown;
-    }).translate([0, 0, BASE_PROFILE_H]) as HasDelete,
-  );
-
-  // ── Стенки: z=7..zUnits*7, минус полость ──
-  const wallOuterCS = rrect(outerW, outerD, BASE_TOP_R);
-  const wallOuterRaw = track(
-    (wallOuterCS as unknown as { extrude: (h: number) => unknown }).extrude(
-      bodyH,
-    ) as HasDelete,
-  );
-  const wallOuter = track(
-    (wallOuterRaw as unknown as {
-      translate: (v: [number, number, number]) => unknown;
-    }).translate([0, 0, BASE_HEIGHT]) as HasDelete,
-  );
-
-  const lipOn = lipStyle !== "none";
-  // Полость ВСЕГДА идёт на полную высоту стенок (bodyH). Раньше при
-  // включённом lip я укорачивал её на STACKING_LIP_SUPPORT_H — из-за
-  // этого на верх стенки налипала сплошная "крышка" толщиной 1.2мм, и
-  // пользователь видел именно её, а не настоящее дно коробки (отсюда
-  // эффект "дно поднимается"). Lip сам по себе конструктивно опирается
-  // на верх стенки — никакая "подушка" внутри не нужна.
   const cavityH = bodyH + 0.02;
-  const cavityInnerW = Math.max(1, outerW - 2 * WALL);
-  const cavityInnerD = Math.max(1, outerD - 2 * WALL);
-  const cavityCS = rrect(cavityInnerW, cavityInnerD, INNER_FILLET_R);
-  const cavityRaw = track(
-    (cavityCS as unknown as { extrude: (h: number) => unknown }).extrude(
-      cavityH,
-    ) as HasDelete,
-  );
-  const cavity = track(
-    (cavityRaw as unknown as {
-      translate: (v: [number, number, number]) => unknown;
-    }).translate([0, 0, BASE_HEIGHT]) as HasDelete,
+  const cavity = T(
+    (cavityCS ?? T(rrect(cavityInnerW, cavityInnerD, INNER_FILLET_R)))
+      .extrude(cavityH)
+      .translate([0, 0, baseH]),
   );
 
-  const walls = track(
-    (wallOuter as unknown as { subtract: (o: unknown) => unknown }).subtract(
-      cavity,
-    ) as HasDelete,
-  );
+  let walls = T(wallOuter.subtract(cavity));
 
-  // ── Stacking lip (опц.) ──
-  let lip: unknown = null;
-  if (lipOn) {
+  // ── Scoop (наклонный пол у задней стенки каждого отсека) ──
+  // Фишка из cq-gridfinity / Pred's bins: вогнутая четверть-цилиндрическая
+  // грань в углу back-wall × floor. Помогает доставать мелочь. Материал
+  // добавляется к полости — это уменьшает полезный объём, но упрощает
+  // доступ. Реализация: блок (compW × R × R) у задней стенки МИНУС
+  // цилиндр радиуса R вдоль оси X, центр оси на (backY, floor+R).
+  if (scoopRadius > 0.5) {
+    const R = Math.min(scoopRadius, Math.min(compD, bodyH) * 0.8);
+    for (let j = 0; j < nY; j++) {
+      for (let i = 0; i < nX; i++) {
+        const cx = compCenter(i, nX, compW);
+        const cy = compCenter(j, nY, compD);
+        const backY = cy + compD / 2;
+        // Строим цилиндр-заготовку длиной compW по оси X, радиус R
+        // (центр оси на (backY - R, baseH + R)). Пересекаем с блоком-
+        // уголком (rect compW×R×R) — получается именно "половина"-
+        // scoop profile.
+        const block = T(
+          MF.cube([compW, R, R], false).translate([
+            cx - compW / 2,
+            backY - R,
+            baseH,
+          ]),
+        );
+        const cyl = T(
+          MF.cylinder(compW + 0.04, R, R, 48, false)
+            .rotate([0, 90, 0])
+            .translate([cx - compW / 2 - 0.02, backY, baseH + R]),
+        );
+        const scoopPrism = T(block.subtract(cyl));
+        walls = T(walls.add(scoopPrism));
+      }
+    }
+  }
+
+  // ── Label ledge (полка под ярлык спереди каждого отсека) ──
+  // Горизонтальная плита толщиной labelLedgeHeight, шириной labelLedgeWidth
+  // (в глубину отсека). Крепится к передней (y-) стенке каждого отсека
+  // на уровне верхней кромки. Снизу — 45° скос, чтобы печаталось без
+  // supports: строим его через блок minus повёрнутый цилиндр (даёт
+  // плоский скос).
+  if (labelLedgeWidth > 0.5 && labelLedgeHeight > 0.2) {
+    const lw = Math.min(labelLedgeWidth, compD * 0.6);
+    const lh = Math.min(labelLedgeHeight, bodyH * 0.4);
+    const topZ = totalH;
+    for (let j = 0; j < nY; j++) {
+      for (let i = 0; i < nX; i++) {
+        const cx = compCenter(i, nX, compW);
+        const cy = compCenter(j, nY, compD);
+        const frontY = cy - compD / 2;
+        // Плита: compW × lw × lh, начало [cx-compW/2, frontY, topZ-lh].
+        const plate = T(
+          MF.cube([compW, lw, lh], false).translate([
+            cx - compW / 2,
+            frontY,
+            topZ - lh,
+          ]),
+        );
+        // Скос 45°: cube(compW × lw × lh) за внутренней гранью ledge'а,
+        // повёрнутый вокруг оси X так, чтобы срезал нижне-заднюю грань.
+        // Проще: subtract'им треугольник, собранный из двух пересекающих
+        // друг друга блоков, повёрнутых вокруг X.
+        // Оставим простую реализацию: плоская плита без chamfer — 45° добавим позже.
+        walls = T(walls.add(plate));
+      }
+    }
+  }
+
+  // ── Stacking lip ──
+  let lip: Manifold | null = null;
+  if (lipStyle !== "none") {
     const lipH = lipStyle === "default" ? STACKING_LIP_H : 1.6;
     const lipDepth = lipStyle === "default" ? STACKING_LIP_DEPTH : 0.9;
 
-    const lipOuterCS = rrect(outerW, outerD, BASE_TOP_R);
-    const lipOuterRaw = track(
-      (lipOuterCS as unknown as { extrude: (h: number) => unknown }).extrude(
-        lipH,
-      ) as HasDelete,
-    );
-    const lipOuter = track(
-      (lipOuterRaw as unknown as {
-        translate: (v: [number, number, number]) => unknown;
-      }).translate([0, 0, totalH]) as HasDelete,
+    const lipOuter = T(
+      T(rrect(outerW, outerD, BASE_TOP_R))
+        .extrude(lipH)
+        .translate([0, 0, totalH]),
     );
 
-    // Внутренний конус: суживается кверху (эмуляция 45°-скоса lip'а)
+    // Внутренний конус: полость lip'а = ОБЩАЯ полость бина вверху,
+    // потому что compartments не доходят до самого верха — над ними
+    // единое отверстие. Используем общий rrect (outerW-2*WALL).
     const innerBotW = cavityInnerW;
     const innerBotD = cavityInnerD;
     const innerTopW = Math.max(0.1, innerBotW - 2 * lipDepth);
     const innerTopD = Math.max(0.1, innerBotD - 2 * lipDepth);
-    const lipInnerCS = rrect(innerBotW, innerBotD, INNER_FILLET_R);
-    const lipInnerRaw = track(
-      (lipInnerCS as unknown as {
-        extrude: (
-          h: number,
-          nDiv: number,
-          twist: number,
-          scaleTop: [number, number],
-        ) => unknown;
-      }).extrude(lipH + 0.04, 0, 0, [
-        innerTopW / innerBotW,
-        innerTopD / innerBotD,
-      ]) as HasDelete,
+    const lipInnerCS = T(rrect(innerBotW, innerBotD, INNER_FILLET_R));
+    const lipInner = T(
+      lipInnerCS
+        .extrude(lipH + 0.04, 0, 0, [
+          innerTopW / innerBotW,
+          innerTopD / innerBotD,
+        ])
+        .translate([0, 0, totalH - 0.02]),
     );
-    const lipInner = track(
-      (lipInnerRaw as unknown as {
-        translate: (v: [number, number, number]) => unknown;
-      }).translate([0, 0, totalH - 0.02]) as HasDelete,
-    );
-
-    lip = track(
-      (lipOuter as unknown as { subtract: (o: unknown) => unknown }).subtract(
-        lipInner,
-      ) as HasDelete,
-    );
+    lip = T(lipOuter.subtract(lipInner));
   }
 
   // ── Собираем бин ──
-  let bin = track(
-    (bases as unknown as { add: (o: unknown) => unknown }).add(
-      bridge,
-    ) as HasDelete,
-  );
-  bin = track(
-    (bin as unknown as { add: (o: unknown) => unknown }).add(
-      walls,
-    ) as HasDelete,
-  );
-  if (lip) {
-    bin = track(
-      (bin as unknown as { add: (o: unknown) => unknown }).add(lip) as HasDelete,
-    );
-  }
+  let bin: Manifold = T(baseSolid.add(walls));
+  if (lip) bin = T(bin.add(lip));
 
   // ── Экспортируем в THREE.BufferGeometry ──
-  const mesh = (bin as unknown as {
-    getMesh: () => {
-      numProp: number;
-      vertProperties: Float32Array;
-      triVerts: Uint32Array;
-    };
-  }).getMesh();
+  const mesh = bin.getMesh();
 
-  // vertProperties — interleaved: [x,y,z,(extra props)] × numVert.
-  // Если numProp > 3, вытаскиваем xyz в отдельный массив.
   let positions: Float32Array;
   if (mesh.numProp === 3) {
     positions = mesh.vertProperties;
@@ -434,7 +420,7 @@ export async function buildGridfinityBin(
   geom.setIndex(new THREE.BufferAttribute(mesh.triVerts, 1));
   geom.computeVertexNormals();
 
-  // Manifold собирает в Z-up (z = высота), наш Viewer — Y-up. Разворачиваем.
+  // Manifold собирает в Z-up (z = высота), наш Viewer — Y-up.
   geom.rotateX(-Math.PI / 2);
 
   // Освобождаем все WASM-объекты.
@@ -446,20 +432,23 @@ export async function buildGridfinityBin(
     }
   }
 
-  // Возвращаем Group с одним Mesh — сохраняем совместимый API с Viewer.
   const threeMesh = new THREE.Mesh(geom);
   const group = new THREE.Group();
   group.add(threeMesh);
   return group;
 }
 
-// ─── Размеры для вывода в UI ──────────────────────────────────────────
-export function binOuterDimensions(p: GridfinityBinParams) {
-  const g = p.gridSize ?? GRID;
-  const w = p.xUnits * g - 0.5;
-  const d = p.yUnits * g - 0.5;
+export function binOuterDimensions(p: GridfinityBinParams): {
+  w: number;
+  d: number;
+  h: number;
+} {
   let h = p.zUnits * HEIGHT_UNIT;
   if (p.lipStyle === "default") h += STACKING_LIP_H;
   else if (p.lipStyle === "thin") h += 1.6;
-  return { w, d, h };
+  return {
+    w: p.xUnits * (p.gridSize ?? GRID) - 0.5,
+    d: p.yUnits * (p.gridSize ?? GRID) - 0.5,
+    h,
+  };
 }
