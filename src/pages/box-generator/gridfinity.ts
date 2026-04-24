@@ -43,18 +43,34 @@ const HOLE_FROM_SIDE = 8; // от бока клетки до центра отв
 
 export type LipStyle = "default" | "thin" | "none";
 export type BaseHoles = "none" | "corner" | "full";
+export type BaseStyle = "standard" | "lite";
 
+// Полный набор параметров Gridfinity-бина. Часть полей (compartments,
+// scoop, ledge, lite-base) используется только новым V2-вьюером для
+// превью; STL-экспорт пока строит по manifold-геометрии без них.
 export type GridfinityBinParams = {
   xUnits: number;
   yUnits: number;
   zUnits: number;
-  gridSize?: number; // по умолчанию 42, можно менять для кастом-сеток
-  outerWallThickness: number; // толщина стенки над бейзом
+  gridSize?: number;
+  outerWallThickness: number;
   lipStyle: LipStyle;
+
+  // Тип базы: стандартная (с профилем и магнитами) или lite (тонкая плита)
+  baseStyle: BaseStyle;
   magnets: BaseHoles;
-  magnetDiameter: number; // диаметр магнитного паза, мм
-  magnetDepth: number; // глубина магнитного паза, мм
+  magnetDiameter: number;
+  magnetDepth: number;
   screwHoles: BaseHoles;
+
+  // Перегородки (разбивка на отсеки)
+  compartmentsX: number;
+  compartmentsY: number;
+
+  // Фичи отсеков
+  scoopRadius: number;
+  labelLedgeWidth: number;
+  labelLedgeHeight: number;
 };
 
 export const DEFAULT_BIN: GridfinityBinParams = {
@@ -64,10 +80,16 @@ export const DEFAULT_BIN: GridfinityBinParams = {
   gridSize: GRID,
   outerWallThickness: 1.2,
   lipStyle: "default",
+  baseStyle: "standard",
   magnets: "none",
   magnetDiameter: DEFAULT_MAGNET_DIAMETER,
   magnetDepth: DEFAULT_MAGNET_DEPTH,
   screwHoles: "none",
+  compartmentsX: 1,
+  compartmentsY: 1,
+  scoopRadius: 0,
+  labelLedgeWidth: 0,
+  labelLedgeHeight: 1.2,
 };
 
 // ─── Асинхронная сборка геометрии через manifold-3d ──────────────────

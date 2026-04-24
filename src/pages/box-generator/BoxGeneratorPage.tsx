@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import * as THREE from "three";
 import { usePageMeta } from "../../lib/usePageMeta";
@@ -6,9 +6,11 @@ import { getMetaByPath } from "../../lib/routes";
 import { useTheme } from "../../lib/theme";
 import { Label, NumberField, ModeTabs, Pill } from "../calculator/ui";
 import { Viewer } from "./Viewer";
+import { ViewerV2 } from "./v2/Viewer";
+import type { BinParams } from "./v2/geometry/bin";
+import { binOuterDimensions as binOuterDimensionsV2 } from "./v2/geometry/bin";
 import {
   buildGridfinityBin,
-  binOuterDimensions,
   DEFAULT_BIN,
   type GridfinityBinParams,
   type LipStyle,
@@ -60,8 +62,34 @@ export default function BoxGeneratorPage() {
     };
   }, [mode, grid, box]);
 
+  // Маппинг старых параметров grid → новый BinParams для V2-вьюера
+  const binParamsV2: BinParams = useMemo(
+    () => ({
+      xUnits: grid.xUnits,
+      yUnits: grid.yUnits,
+      zUnits: grid.zUnits,
+      gridSize: grid.gridSize ?? 42,
+      outerWallThickness: grid.outerWallThickness,
+      lipStyle: grid.lipStyle,
+      baseStyle: grid.baseStyle,
+      compartmentsX: grid.compartmentsX,
+      compartmentsY: grid.compartmentsY,
+      innerWallThickness: 1.2,
+      scoopRadius: grid.scoopRadius,
+      labelLedgeWidth: grid.labelLedgeWidth,
+      labelLedgeHeight: grid.labelLedgeHeight,
+      magnets: grid.magnets,
+      screwHoles: grid.screwHoles,
+      magnetDiameter: grid.magnetDiameter,
+      magnetDepth: grid.magnetDepth,
+    }),
+    [grid],
+  );
+
   const dims =
-    mode === "gridfinity" ? binOuterDimensions(grid) : regularBoxDimensions(box);
+    mode === "gridfinity"
+      ? binOuterDimensionsV2(binParamsV2)
+      : regularBoxDimensions(box);
 
   const onExport = () => {
     if (!mesh) return;
@@ -141,8 +169,12 @@ export default function BoxGeneratorPage() {
 
         {/* 3D-вьюер */}
         <div className="soft p-2 sm:p-3 min-h-[420px] lg:min-h-[560px] relative">
-          <Viewer mesh={mesh} theme={theme} fitKey={mode} />
-          {building ? (
+          {mode === "gridfinity" ? (
+            <ViewerV2 params={binParamsV2} theme={theme} fitKey={mode} />
+          ) : (
+            <Viewer mesh={mesh} theme={theme} fitKey={mode} />
+          )}
+          {building && mode === "regular" ? (
             <div className="absolute right-4 top-4 tag text-xs">Считаю…</div>
           ) : null}
         </div>
