@@ -44,7 +44,8 @@ export type GridfinityBinParams = {
 
   // Стенки
   outerWallThickness: number; // мм (внешняя стенка)
-  bottomThickness: number; // мм (толщина дна)
+  // Дно у Gridfinity-bin — монолитная верхняя грань юбки (сплошная, по
+  // спецификации), отдельно задавать его толщину не нужно.
 
   // Верхний стыковочный бортик
   lipStyle: LipStyle;
@@ -60,7 +61,6 @@ export const DEFAULT_BIN: GridfinityBinParams = {
   zUnits: 3,
   gridSize: GRID,
   outerWallThickness: 1.2,
-  bottomThickness: 1.2,
   lipStyle: "default",
   magnets: "none",
   screwHoles: "none",
@@ -122,7 +122,6 @@ export function buildGridfinityBin(
     zUnits,
     gridSize = GRID,
     outerWallThickness,
-    bottomThickness,
     lipStyle,
     magnets,
     screwHoles,
@@ -224,7 +223,7 @@ export function buildGridfinityBin(
   // Внутри делаем "дыру" со сдвигом на outerWallThickness для пустоты,
   // а дно добавляем отдельным тонким слоем (чтобы bin не был сквозным).
 
-  const bodyHeight = Math.max(zUnits * HEIGHT_UNIT, bottomThickness + 1);
+  const bodyHeight = zUnits * HEIGHT_UNIT;
   const innerW = outerW - outerWallThickness * 2;
   const innerH = outerH - outerWallThickness * 2;
   const outerShape = roundedRectShape(outerW, outerH, BASE_OUTER_RADIUS);
@@ -245,22 +244,10 @@ export function buildGridfinityBin(
   wallsMesh.position.y = SKIRT_H_TOTAL;
   group.add(wallsMesh);
 
-  // Дно: тонкий слой прямо сверху над юбкой, заполняющий внутренность.
-  const floorShape = roundedRectShape(
-    innerW,
-    innerH,
-    Math.max(0.5, BASE_OUTER_RADIUS - outerWallThickness),
-  );
-  const floorGeom = new THREE.ExtrudeGeometry(floorShape, {
-    depth: bottomThickness,
-    bevelEnabled: false,
-    steps: 1,
-    curveSegments: 16,
-  });
-  floorGeom.rotateX(-Math.PI / 2);
-  const floorMesh = new THREE.Mesh(floorGeom);
-  floorMesh.position.y = SKIRT_H_TOTAL + bottomThickness;
-  group.add(floorMesh);
+  // Дно бина — это монолитная верхняя грань юбки (она сплошная по спеке),
+  // отдельного "floor"-слоя не добавляем: иначе получается визуальное
+  // "второе дно" чуть выше. bottomThickness для Gridfinity не используется,
+  // оставлен в типе только для совместимости с UI, но скрыт из панели.
 
   // ── 3) Верхний lip (стыковочный бортик для стакающихся коробок) ──
   if (lipStyle !== "none") {
@@ -387,7 +374,7 @@ export function binOuterDimensions(p: GridfinityBinParams): {
   const gridSize = p.gridSize ?? GRID;
   const w = p.xUnits * gridSize - CLEARANCE;
   const d = p.yUnits * gridSize - CLEARANCE;
-  const bodyH = Math.max(p.zUnits * HEIGHT_UNIT, p.bottomThickness + 1);
+  const bodyH = p.zUnits * HEIGHT_UNIT;
   const lipH =
     p.lipStyle === "default"
       ? LIP_HEIGHT_DEFAULT

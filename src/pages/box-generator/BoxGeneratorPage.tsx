@@ -209,33 +209,20 @@ function GridfinityControls({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Внешняя стенка</Label>
-          <NumberField
-            value={value.outerWallThickness}
-            onChange={(v) =>
-              set("outerWallThickness", Math.max(0.4, Number(v) || 1.2))
-            }
-            suffix="мм"
-            min={0.4}
-            max={3}
-            step={0.1}
-          />
-        </div>
-        <div>
-          <Label>Дно</Label>
-          <NumberField
-            value={value.bottomThickness}
-            onChange={(v) =>
-              set("bottomThickness", Math.max(0.4, Number(v) || 1.2))
-            }
-            suffix="мм"
-            min={0.4}
-            max={3}
-            step={0.1}
-          />
-        </div>
+      <div>
+        <Label hint="Дно у Gridfinity-bin — это сама юбка (сплошная), отдельной толщины не надо">
+          Внешняя стенка
+        </Label>
+        <NumberField
+          value={value.outerWallThickness}
+          onChange={(v) =>
+            set("outerWallThickness", Math.max(0.4, Number(v) || 1.2))
+          }
+          suffix="мм"
+          min={0.4}
+          max={3}
+          step={0.1}
+        />
       </div>
 
       <div>

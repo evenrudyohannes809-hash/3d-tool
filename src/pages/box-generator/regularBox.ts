@@ -111,31 +111,57 @@ export function buildRegularBox(p: RegularBoxParams = DEFAULT_BOX): THREE.Group 
   floor.position.y = bottomThickness;
   parent.add(floor);
 
-  // Snap-lid: тонкий борт на высоте height, слегка уже стенок
+  // Snap-lid: ОТДЕЛЬНАЯ плоская крышка — плита размером с коробку сверху и
+  // юбка-направляющая снизу, которая на ~0.4мм меньше внутренности бокса
+  // (зазор, чтобы печаталась без натяга). Рендерим её с офсетом по +Y,
+  // чтоб зритель сразу видел "коробка + её крышка".
   if (lid === "snap") {
-    const lidLipW = width - wallThickness;
-    const lidLipD = depth - wallThickness;
-    const lidShape = roundedRectShape(
-      lidLipW,
-      lidLipD,
-      Math.max(0.5, cornerRadius - wallThickness / 2),
-    );
-    const lidInner = rectPathWithRadius(
-      width - wallThickness * 2 - 0.8,
-      depth - wallThickness * 2 - 0.8,
-      Math.max(0.5, cornerRadius - wallThickness - 0.8),
-    );
-    lidShape.holes.push(lidInner);
-    const lidGeom = new THREE.ExtrudeGeometry(lidShape, {
-      depth: 2.5,
+    const LID_PLATE_T = 2; // мм — толщина верхней пластины крышки
+    const LID_LIP_H = 4; // мм — высота юбки, которая входит в бокс
+    const CLEARANCE = 0.4; // зазор между юбкой крышки и внутренней стенкой бокса
+    const OFFSET_ABOVE_BOX = 15; // мм — чтоб крышка зрительно "парила" над боксом
+
+    const lidGroup = new THREE.Group();
+
+    // Верхняя пластина крышки
+    const plateShape = roundedRectShape(width, depth, cornerRadius);
+    const plateGeom = new THREE.ExtrudeGeometry(plateShape, {
+      depth: LID_PLATE_T,
       bevelEnabled: false,
       steps: 1,
       curveSegments: 20,
     });
-    lidGeom.rotateX(-Math.PI / 2);
-    const lidMesh = new THREE.Mesh(lidGeom);
-    lidMesh.position.y = height + 2.5; // поверх стенок
-    parent.add(lidMesh);
+    plateGeom.rotateX(-Math.PI / 2);
+    const plate = new THREE.Mesh(plateGeom);
+    plate.position.y = LID_PLATE_T; // плита "над" юбкой
+    lidGroup.add(plate);
+
+    // Юбка-направляющая (вставляется внутрь коробки)
+    const lipW = width - wallThickness * 2 - CLEARANCE * 2;
+    const lipD = depth - wallThickness * 2 - CLEARANCE * 2;
+    const lipR = Math.max(0.3, cornerRadius - wallThickness - CLEARANCE);
+    const lipShape = roundedRectShape(lipW, lipD, lipR);
+    // Юбка полая внутри, чтобы экономить пластик на печати.
+    const lipInner = rectPathWithRadius(
+      Math.max(1, lipW - 2),
+      Math.max(1, lipD - 2),
+      Math.max(0.3, lipR - 1),
+    );
+    lipShape.holes.push(lipInner);
+    const lipGeom = new THREE.ExtrudeGeometry(lipShape, {
+      depth: LID_LIP_H,
+      bevelEnabled: false,
+      steps: 1,
+      curveSegments: 20,
+    });
+    lipGeom.rotateX(-Math.PI / 2);
+    const lip = new THREE.Mesh(lipGeom);
+    lip.position.y = LID_LIP_H; // юбка "под" плитой
+    lidGroup.add(lip);
+
+    // Общий офсет: крышка сверху и слегка над коробкой, чтоб зрительно отделялась
+    lidGroup.position.y = height + bottomThickness + OFFSET_ABOVE_BOX;
+    parent.add(lidGroup);
   }
 
   return parent;
@@ -146,6 +172,7 @@ export function regularBoxDimensions(p: RegularBoxParams): {
   d: number;
   h: number;
 } {
-  const extra = p.lid === "snap" ? 2.5 : 0;
-  return { w: p.width, d: p.depth, h: p.height + extra };
+  // Размеры — только у коробки (крышка отдельная модель; показываем её габарит,
+  // если она нужна, отдельно — но для простоты в UI показываем только бокс).
+  return { w: p.width, d: p.depth, h: p.height };
 }
