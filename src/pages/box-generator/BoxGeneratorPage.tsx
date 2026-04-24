@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { usePageMeta } from "../../lib/usePageMeta";
 import { getMetaByPath } from "../../lib/routes";
 import { useTheme } from "../../lib/theme";
-import { Label, NumberField, ModeTabs, Pill } from "../calculator/ui";
+import { Label, NumberField, ModeTabs, Pill, SoftToggle } from "../calculator/ui";
 import { Viewer } from "./Viewer";
 import { ViewerV2 } from "./v2/Viewer";
 import type { BinParams } from "./v2/geometry/bin";
@@ -71,6 +71,7 @@ export default function BoxGeneratorPage() {
       screwHoles: grid.screwHoles,
       magnetDiameter: grid.magnetDiameter,
       magnetDepth: grid.magnetDepth,
+      screwHeatsetInsert: grid.screwHeatsetInsert,
     }),
     [grid],
   );
@@ -413,7 +414,7 @@ function GridfinityControls({
       </div>
 
       <div>
-        <Label hint="Пазы снизу под неодимовые магниты, которыми коробка притягивается к металлической baseplate. Смотри снизу модели (поверни мышью).">
+        <Label hint="Круглые пазы снизу базы под дисковые неодимовые магниты. По стандарту Gridfinity — D6×2мм (диаметр 6мм, высота 2мм). Печатный слот делается чуть больше: Ø6.5×2.4мм. Магнит вклеивается суперклеем. Нужно только если будешь использовать магнитный baseplate для фиксации бина. На модели снизу видно тёмно-серые круги — это и есть пазы.">
           Пазы для магнитов
         </Label>
         <div className="flex gap-2 flex-wrap mb-2">
@@ -464,10 +465,10 @@ function GridfinityControls({
       </div>
 
       <div>
-        <Label hint="Сквозные 3мм отверстия — коробку можно прикрутить к полке / столу.">
+        <Label hint="Сквозные отверстия Ø3мм под винт M3 — чтобы прикрутить коробку снизу к ящику, полке, столу. Без резьбы (резьба в пластике слабая). Обычно используют саморез M3 (сам режет пластик) либо — надёжнее — заранее вплавляют паяльником латунную втулку heat-set M3 (см. чекбокс ниже), и уже в неё закручивают металлический винт. На модели снизу видно оранжевые точки — это и есть отверстия.">
           Отверстия под винты
         </Label>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap mb-2">
           {(["none", "corner", "full"] as BaseHoles[]).map((l) => (
             <Pill
               key={l}
@@ -482,6 +483,25 @@ function GridfinityControls({
             </Pill>
           ))}
         </div>
+        {value.screwHoles !== "none" ? (
+          <div className="flex items-start gap-3 mt-2">
+            <SoftToggle
+              on={value.screwHeatsetInsert}
+              onChange={(v) => set("screwHeatsetInsert", v)}
+              ariaLabel="Heat-set M3 insert"
+            />
+            <div className="text-sm">
+              <div className="font-semibold">
+                Под латунную втулку heat-set M3
+              </div>
+              <div className="text-muted text-xs mt-0.5">
+                Ø5×5мм глухое отверстие (иначе сквозное Ø3мм). Втулка даёт
+                прочную металлическую резьбу — можно много раз откручивать,
+                не сорвёт.
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </>
   );
