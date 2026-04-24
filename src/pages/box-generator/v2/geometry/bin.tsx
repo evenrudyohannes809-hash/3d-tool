@@ -53,6 +53,8 @@ export type BinParams = {
   screwHoles: HolePattern;
   magnetDiameter: number;
   magnetDepth: number;
+  // Если true — в STL вычитается Ø5×5мм глухое отверстие под heat-set втулку.
+  screwHeatsetInsert: boolean;
 };
 
 export function Bin({ params, color }: { params: BinParams; color: string }) {
@@ -73,6 +75,7 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
     magnets,
     screwHoles,
     magnetDiameter,
+    screwHeatsetInsert,
   } = params;
 
   const baseH = baseStyle === "lite" ? LITE_BASE_HEIGHT : BASE_HEIGHT;
@@ -396,9 +399,13 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
         </mesh>
       ))}
 
-      {/* HOLE INDICATORS: кружочки снизу, показывают где будут дырки магнитов/винтов
-          в STL-экспорте. В превью они не вычитаются из меша (нет CSG), просто
-          подсвечивают позицию. */}
+      {/* HOLE INDICATORS: маркеры снизу базы, показывают где в STL будут
+          вычтены дырки магнитов и винтов. В превью геометрия не режется
+          (нет CSG), поэтому рисуем тонкие "наклейки" на нижней грани.
+
+          Магнит — тёмно-серый диск Ø magnetDiameter.
+          Винт — яркий оранжевый диск меньшего размера В ЦЕНТРЕ магнита
+          (чтобы на тёмном фоне было чётко видно "вложенную дырку под винт"). */}
       {baseStyle === "standard" &&
         computeHolePositions({
           pattern: magnets,
@@ -408,13 +415,13 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
         }).map((p, i) => (
           <mesh
             key={`mag-${i}`}
-            position={[p.x, p.y, 0.02]}
+            position={[p.x, p.y, -0.05]}
             rotation={[-Math.PI / 2, 0, 0]}
           >
             <cylinderGeometry
-              args={[magnetDiameter / 2, magnetDiameter / 2, 0.05, 24]}
+              args={[magnetDiameter / 2, magnetDiameter / 2, 0.1, 24]}
             />
-            <meshBasicMaterial color="#1a2a3a" />
+            <meshBasicMaterial color="#1a2028" />
           </mesh>
         ))}
       {baseStyle === "standard" &&
@@ -426,11 +433,20 @@ export function Bin({ params, color }: { params: BinParams; color: string }) {
         }).map((p, i) => (
           <mesh
             key={`scr-${i}`}
-            position={[p.x, p.y, 0.03]}
+            position={[p.x, p.y, -0.15]}
             rotation={[-Math.PI / 2, 0, 0]}
           >
-            <cylinderGeometry args={[1.5, 1.5, 0.05, 18]} />
-            <meshBasicMaterial color="#0a1520" />
+            <cylinderGeometry
+              args={[
+                screwHeatsetInsert ? 2.5 : 1.5,
+                screwHeatsetInsert ? 2.5 : 1.5,
+                0.1,
+                24,
+              ]}
+            />
+            <meshBasicMaterial
+              color={screwHeatsetInsert ? "#ffcc33" : "#ffa726"}
+            />
           </mesh>
         ))}
 
@@ -537,4 +553,5 @@ export const DEFAULT_BIN_PARAMS: BinParams = {
   screwHoles: "none",
   magnetDiameter: 6.5,
   magnetDepth: 2.4,
+  screwHeatsetInsert: false,
 };

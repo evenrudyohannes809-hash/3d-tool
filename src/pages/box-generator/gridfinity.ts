@@ -38,7 +38,9 @@ const STACKING_LIP_DEPTH = 2.6; // суммарный inward-scos бортика
 // диаметра и глубины магнита пользователь меняет через UI.
 const DEFAULT_MAGNET_DIAMETER = 6.5; // мм (стандартный D6 магнит)
 const DEFAULT_MAGNET_DEPTH = 2.4; // 2мм магнит + 2 слоя покрытия
-const SCREW_R = 3 / 2;
+const SCREW_R = 3 / 2; // Ø3мм — стандартная сквозная дырка под M3
+const SCREW_HEATSET_R = 5 / 2; // Ø5мм — глухое отверстие под латунную втулку heat-set M3
+const SCREW_HEATSET_DEPTH = 5; // стандартная высота M3 heat-set insert
 const HOLE_FROM_SIDE = 8; // от бока клетки до центра отверстия
 
 export type LipStyle = "default" | "thin" | "none";
@@ -62,6 +64,9 @@ export type GridfinityBinParams = {
   magnetDiameter: number;
   magnetDepth: number;
   screwHoles: BaseHoles;
+  // Если true, винтовое отверстие — Ø5×5мм под латунную heat-set M3 втулку
+  // (глухое), иначе — Ø3мм сквозное под обычный винт M3.
+  screwHeatsetInsert: boolean;
 
   // Перегородки (разбивка на отсеки)
   compartmentsX: number;
@@ -85,6 +90,7 @@ export const DEFAULT_BIN: GridfinityBinParams = {
   magnetDiameter: DEFAULT_MAGNET_DIAMETER,
   magnetDepth: DEFAULT_MAGNET_DEPTH,
   screwHoles: "none",
+  screwHeatsetInsert: false,
   compartmentsX: 1,
   compartmentsY: 1,
   scoopRadius: 0,
@@ -116,6 +122,7 @@ export async function buildGridfinityBin(
     magnetDiameter,
     magnetDepth,
     screwHoles,
+    screwHeatsetInsert,
   } = p;
   const MAGNET_R = Math.max(0.5, magnetDiameter / 2);
   const MAGNET_DEPTH = Math.max(0.4, magnetDepth);
@@ -272,15 +279,24 @@ export async function buildGridfinityBin(
         }
       }
       if (addScrews) {
+        // Два варианта дырки под винт:
+        //   обычный — сквозная Ø3мм под M3 с гайкой/саморезом снизу
+        //   heat-set — глухая Ø5×5мм под латунную втулку (запрессовывается
+        //     паяльником, даёт прочную резьбу). Сверху над ней остаётся
+        //     BASE_HEIGHT - SCREW_HEATSET_DEPTH = 2мм донышка для прочности.
+        const r = screwHeatsetInsert ? SCREW_HEATSET_R : SCREW_R;
+        const depth = screwHeatsetInsert
+          ? SCREW_HEATSET_DEPTH
+          : BASE_HEIGHT + 0.04;
         for (const [sx, sy] of cornerOffsets) {
           const scrCS = track(
             (CrossSection as unknown as {
               circle: (r: number, n: number) => unknown;
-            }).circle(SCREW_R, 24) as HasDelete,
+            }).circle(r, 24) as HasDelete,
           );
           const scr = track(
             (scrCS as unknown as { extrude: (h: number) => unknown }).extrude(
-              BASE_HEIGHT + 0.04,
+              depth,
             ) as HasDelete,
           );
           const scrPos = track(
