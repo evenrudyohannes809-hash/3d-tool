@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import * as THREE from "three";
 import { usePageMeta } from "../../lib/usePageMeta";
@@ -6,13 +6,16 @@ import { getMetaByPath } from "../../lib/routes";
 import { useTheme } from "../../lib/theme";
 import { Label, NumberField, ModeTabs, Pill } from "../calculator/ui";
 import { Viewer } from "./Viewer";
+import { ViewerV2 } from "./v2/Viewer";
+import type { BinParams } from "./v2/geometry/bin";
+import { binOuterDimensions as binOuterDimensionsV2 } from "./v2/geometry/bin";
 import {
   buildGridfinityBin,
-  binOuterDimensions,
   DEFAULT_BIN,
   type GridfinityBinParams,
   type LipStyle,
   type BaseHoles,
+  type BaseStyle,
 } from "./gridfinity";
 import {
   buildRegularBox,
@@ -60,8 +63,34 @@ export default function BoxGeneratorPage() {
     };
   }, [mode, grid, box]);
 
+  // Маппинг старых параметров grid → новый BinParams для V2-вьюера
+  const binParamsV2: BinParams = useMemo(
+    () => ({
+      xUnits: grid.xUnits,
+      yUnits: grid.yUnits,
+      zUnits: grid.zUnits,
+      gridSize: grid.gridSize ?? 42,
+      outerWallThickness: grid.outerWallThickness,
+      lipStyle: grid.lipStyle,
+      baseStyle: grid.baseStyle,
+      compartmentsX: grid.compartmentsX,
+      compartmentsY: grid.compartmentsY,
+      innerWallThickness: 1.2,
+      scoopRadius: grid.scoopRadius,
+      labelLedgeWidth: grid.labelLedgeWidth,
+      labelLedgeHeight: grid.labelLedgeHeight,
+      magnets: grid.magnets,
+      screwHoles: grid.screwHoles,
+      magnetDiameter: grid.magnetDiameter,
+      magnetDepth: grid.magnetDepth,
+    }),
+    [grid],
+  );
+
   const dims =
-    mode === "gridfinity" ? binOuterDimensions(grid) : regularBoxDimensions(box);
+    mode === "gridfinity"
+      ? binOuterDimensionsV2(binParamsV2)
+      : regularBoxDimensions(box);
 
   const onExport = () => {
     if (!mesh) return;
@@ -141,8 +170,12 @@ export default function BoxGeneratorPage() {
 
         {/* 3D-вьюер */}
         <div className="soft p-2 sm:p-3 min-h-[420px] lg:min-h-[560px] relative">
-          <Viewer mesh={mesh} theme={theme} fitKey={mode} />
-          {building ? (
+          {mode === "gridfinity" ? (
+            <ViewerV2 params={binParamsV2} theme={theme} fitKey={mode} />
+          ) : (
+            <Viewer mesh={mesh} theme={theme} fitKey={mode} />
+          )}
+          {building && mode === "regular" ? (
             <div className="absolute right-4 top-4 tag text-xs">Считаю…</div>
           ) : null}
         </div>
@@ -277,6 +310,103 @@ function GridfinityControls({
                   : "Без бортика"}
             </Pill>
           ))}
+        </div>
+      </div>
+
+      <div>
+        <Label hint="Стандартная база — 3-уровневая с магнитами, как у Gridfinity-спеки. Lite — плоская тонкая плита (экономит пластик, но в baseplate не защёлкивается и без магнитов).">
+          Тип базы
+        </Label>
+        <div className="flex gap-2 flex-wrap">
+          {(["standard", "lite"] as BaseStyle[]).map((b) => (
+            <Pill
+              key={b}
+              active={value.baseStyle === b}
+              onClick={() => set("baseStyle", b)}
+            >
+              {b === "standard" ? "Стандартная" : "Lite (тонкая)"}
+            </Pill>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Label hint="Разбить внутреннее пространство на отсеки перегородками. 1×1 — без перегородок.">
+          Перегородки (отсеки)
+        </Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>По ширине</Label>
+            <NumberField
+              value={value.compartmentsX}
+              onChange={(v) =>
+                set("compartmentsX", Math.max(1, Math.min(10, Math.round(Number(v) || 1))))
+              }
+              min={1}
+              max={10}
+              step={1}
+            />
+          </div>
+          <div>
+            <Label>По глубине</Label>
+            <NumberField
+              value={value.compartmentsY}
+              onChange={(v) =>
+                set("compartmentsY", Math.max(1, Math.min(10, Math.round(Number(v) || 1))))
+              }
+              min={1}
+              max={10}
+              step={1}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <Label hint="Скос у задней стенки отсека — удобнее доставать мелочь пальцем. 0 — выключено.">
+          Scoop (наклонный пол)
+        </Label>
+        <NumberField
+          value={value.scoopRadius}
+          onChange={(v) => set("scoopRadius", Math.max(0, Math.min(20, Number(v) || 0)))}
+          suffix="мм"
+          min={0}
+          max={20}
+          step={0.5}
+        />
+      </div>
+
+      <div>
+        <Label hint="Горизонтальная полочка спереди отсека под стикер / ярлык. 0 — выключено.">
+          Label (полка под ярлык)
+        </Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Ширина</Label>
+            <NumberField
+              value={value.labelLedgeWidth}
+              onChange={(v) =>
+                set("labelLedgeWidth", Math.max(0, Math.min(30, Number(v) || 0)))
+              }
+              suffix="мм"
+              min={0}
+              max={30}
+              step={0.5}
+            />
+          </div>
+          <div>
+            <Label>Толщина</Label>
+            <NumberField
+              value={value.labelLedgeHeight}
+              onChange={(v) =>
+                set("labelLedgeHeight", Math.max(0.4, Math.min(5, Number(v) || 1.2)))
+              }
+              suffix="мм"
+              min={0.4}
+              max={5}
+              step={0.1}
+            />
+          </div>
         </div>
       </div>
 
